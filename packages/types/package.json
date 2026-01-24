@@ -1,0 +1,26 @@
+{
+    "name": "@repo/types",
+    "version": "0.1.0",
+    "type": "module",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "lint": "eslint --max-warnings 0"
+    },
+    "dependencies": {
+        "zod": "^3.24.0"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "*",
+        "typescript": "5.9.2"
+    }
+}

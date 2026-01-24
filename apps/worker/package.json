@@ -1,0 +1,28 @@
+{
+    "name": "@repo/worker",
+    "version": "0.1.0",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "lint": "eslint --max-warnings 0"
+    },
+    "dependencies": {
+        "@repo/types": "*",
+        "bullmq": "^5.0.0",
+        "ioredis": "^5.4.0",
+        "playwright": "^1.49.0",
+        "pg": "^8.13.0",
+        "drizzle-orm": "^0.36.0"
+    },
+    "devDependencies": {
+        "@repo/eslint-config": "*",
+        "@repo/typescript-config": "*",
+        "@types/node": "^22.15.3",
+        "@types/pg": "^8.11.10",
+        "tsx": "^4.19.0",
+        "typescript": "5.9.2"
+    }
+}
