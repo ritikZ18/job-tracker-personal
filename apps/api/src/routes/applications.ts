@@ -90,7 +90,7 @@ router.post('/', async (req: Request, res: Response) => {
             .values({
                 ...parsed.data,
                 userId: req.user!.id,
-                appliedAt: parsed.data.appliedAt ? new Date(parsed.data.appliedAt) : null,
+                appliedAt: parsed.data.appliedAt ? new Date(parsed.data.appliedAt) : new Date(),
             })
             .returning();
 

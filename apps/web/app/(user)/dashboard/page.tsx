@@ -52,6 +52,14 @@ const Icons = {
     ),
 };
 
+function StatusCell({ value }: { value: string }) {
+    return (
+        <div className={`status-cell status-cell-${value.toLowerCase()}`}>
+            {value}
+        </div>
+    );
+}
+
 function StatusPill({ value }: { value: string }) {
     return <span className={`pill pill-${value.toLowerCase()}`}>{value}</span>;
 }
@@ -64,7 +72,8 @@ function StatusEditor({ value, onValueChange, stopEditing }: any) {
                 onValueChange(e.target.value);
                 stopEditing();
             }}
-            className="input w-full h-full text-sm py-1"
+            className="w-full h-full text-sm bg-transparent border-none outline-none cursor-pointer"
+            style={{ backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
             autoFocus
         >
             {STATUS_OPTIONS.map((s) => (
@@ -160,7 +169,7 @@ export default function DashboardPage() {
             headerName: 'COMPANY',
             editable: true,
             flex: 1,
-            minWidth: 140,
+            minWidth: 100,
         },
         {
             field: 'jobTitle',
@@ -172,15 +181,15 @@ export default function DashboardPage() {
         {
             field: 'jobDescription',
             headerName: 'REQUIREMENTS',
-            flex: 1.5,
-            minWidth: 180,
+            editable: true,
+            width: 220,
             cellRenderer: (params: ICellRendererParams) => {
                 const desc = params.value as string | null;
                 if (!desc) return <span className="text-tertiary">—</span>;
-                const truncated = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+                const truncated = desc.length > 30 ? desc.substring(0, 30) + '...' : desc;
                 return (
                     <span
-                        className="text-secondary text-sm cursor-help"
+                        className="text-secondary text-xs cursor-help truncate block"
                         title={desc}
                     >
                         {truncated}
@@ -191,16 +200,23 @@ export default function DashboardPage() {
         {
             field: 'status',
             headerName: 'STATUS',
-            cellRenderer: (params: ICellRendererParams) => <StatusPill value={params.value} />,
+            cellRenderer: (params: ICellRendererParams) => <StatusCell value={params.value} />,
             editable: true,
             cellEditor: StatusEditor,
-            width: 130,
+            width: 140,
+            cellStyle: { padding: '4px' },
         },
         {
             field: 'appliedAt',
             headerName: 'APPLIED',
             valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
-            width: 95,
+            width: 90,
+        },
+        {
+            field: 'rejectedAt',
+            headerName: 'REJECTED',
+            valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
+            width: 90,
         },
         {
             field: 'jobUrl',

@@ -1,51 +1,58 @@
 @import "tailwindcss";
 
 /* ========================================
-   TESLA-INSPIRED THEME
-   Premium, Minimal, Fast
-   Light mode default with Dark mode support
+   THEME SYSTEM
+   Theme 1 (Light): "Opaline" - Minimal gray/white with energetic orange accent
+   Theme 2 (Dark): "Jade Pebble Morning" - Dark with calm green/teal accents
    ======================================== */
 
 :root {
-  /* LIGHT MODE TOKENS (default) */
-  --app-bg: #F6F7F9;
+  /* ===== OPALINE THEME (Light) ===== */
+  /* Base backgrounds */
+  --app-bg: #F4F4F6;
   --surface: #FFFFFF;
-  --surface-alt: #FAFBFC;
-  --text-primary: #111827;
-  --text-secondary: #4B5563;
-  --text-tertiary: #9CA3AF;
-  --border-soft: rgba(17, 24, 39, 0.08);
-  --divider: rgba(17, 24, 39, 0.06);
-  --shadow-soft: 0 1px 3px rgba(17, 24, 39, 0.04), 0 1px 2px rgba(17, 24, 39, 0.02);
-  --shadow-md: 0 4px 6px -1px rgba(17, 24, 39, 0.05), 0 2px 4px -2px rgba(17, 24, 39, 0.03);
-  --shadow-lg: 0 10px 15px -3px rgba(17, 24, 39, 0.06), 0 4px 6px -4px rgba(17, 24, 39, 0.03);
+  --surface-alt: #E7E7E7;
 
-  /* Accent - Tesla-inspired muted red */
-  --accent: #E31937;
-  --accent-hover: #CC1630;
-  --accent-light: rgba(227, 25, 55, 0.08);
+  /* Text - near black for readability */
+  --text-primary: #1A1A1A;
+  --text-secondary: #4A4A4A;
+  --text-tertiary: #8A8A8A;
+
+  /* Borders & dividers */
+  --border-soft: #D2D2D4;
+  --divider: #E0E0E2;
+
+  /* Shadows */
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+  /* Accent - Energetic coral/orange */
+  --accent: #FF634A;
+  --accent-hover: #E5523A;
+  --accent-light: rgba(255, 99, 74, 0.10);
   --accent-text: #FFFFFF;
 
-  /* Status colors - soft, not saturated */
-  --status-saved-bg: rgba(107, 114, 128, 0.08);
-  --status-saved-text: #6B7280;
-  --status-applied-bg: rgba(59, 130, 246, 0.08);
+  /* Status colors */
+  --status-saved-bg: rgba(138, 138, 138, 0.12);
+  --status-saved-text: #6B6B6B;
+  --status-applied-bg: rgba(59, 130, 246, 0.10);
   --status-applied-text: #2563EB;
-  --status-interviewing-bg: rgba(245, 158, 11, 0.08);
+  --status-interviewing-bg: rgba(245, 158, 11, 0.10);
   --status-interviewing-text: #D97706;
-  --status-offer-bg: rgba(16, 185, 129, 0.08);
+  --status-offer-bg: rgba(16, 185, 129, 0.10);
   --status-offer-text: #059669;
-  --status-rejected-bg: rgba(239, 68, 68, 0.08);
+  --status-rejected-bg: rgba(239, 68, 68, 0.10);
   --status-rejected-text: #DC2626;
-  --status-ghosted-bg: rgba(139, 92, 246, 0.08);
+  --status-ghosted-bg: rgba(139, 92, 246, 0.10);
   --status-ghosted-text: #7C3AED;
 
-  /* Typography - Apple system font (SF Pro) */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  /* Typography - Apple System Font Stack */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Fira Code', 'Consolas', monospace;
 
   /* Grid lines */
-  --grid-line: rgba(0, 0, 0, 0.12);
+  --grid-line: rgba(0, 0, 0, 0.10);
 
   /* Spacing scale */
   --radius-sm: 6px;
@@ -59,42 +66,65 @@
   --transition-slow: 250ms ease;
 }
 
-/* DARK MODE TOKENS */
+/* ===== JADE PEBBLE MORNING THEME (Dark) ===== */
 [data-theme="dark"] {
-  --app-bg: #0B0D10;
-  --surface: #111318;
-  --surface-alt: #151823;
-  --text-primary: rgba(255, 255, 255, 0.92);
-  --text-secondary: rgba(255, 255, 255, 0.65);
-  --text-tertiary: rgba(255, 255, 255, 0.40);
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --divider: rgba(255, 255, 255, 0.06);
-  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  /* Base backgrounds - near black with subtle warmth */
+  --app-bg: #0B0D0C;
+  --surface: #151917;
+  --surface-alt: #1E2420;
 
-  /* Accent in dark - slightly brighter */
-  --accent: #F43F5E;
-  --accent-hover: #E11D48;
-  --accent-light: rgba(244, 63, 94, 0.12);
+  /* Elevated surfaces - deep forest */
+  --surface-elevated: #404E3B;
 
-  /* Status - darker fills, softer */
-  --status-saved-bg: rgba(107, 114, 128, 0.15);
-  --status-applied-bg: rgba(59, 130, 246, 0.15);
-  --status-interviewing-bg: rgba(245, 158, 11, 0.15);
-  --status-offer-bg: rgba(16, 185, 129, 0.15);
-  --status-rejected-bg: rgba(239, 68, 68, 0.15);
-  --status-ghosted-bg: rgba(139, 92, 246, 0.15);
+  /* Text - light and contrast-safe */
+  --text-primary: #E6E6E6;
+  --text-secondary: rgba(230, 230, 230, 0.72);
+  --text-tertiary: rgba(230, 230, 230, 0.48);
+
+  /* Borders & dividers */
+  --border-soft: rgba(186, 200, 177, 0.15);
+  --divider: rgba(186, 200, 177, 0.10);
+
+  /* Shadows */
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+
+  /* Primary accent - Sage green */
+  --accent: #7B9669;
+  --accent-hover: #8DA87A;
+  --accent-light: rgba(123, 150, 105, 0.18);
+  --accent-text: #0B0D0C;
+
+  /* Secondary accent - Blue-green (available for links, etc) */
+  --accent-secondary: #6C8480;
+  --accent-muted: #BAC8B1;
+
+  /* Status colors - adjusted for dark - VIBRANT */
+  --status-saved-bg: rgba(180, 180, 180, 0.18);
+  --status-saved-text: #D0D0D0;
+  --status-applied-bg: rgba(96, 165, 250, 0.22);
+  --status-applied-text: #60A5FA;
+  --status-interviewing-bg: rgba(251, 191, 36, 0.22);
+  --status-interviewing-text: #FBBF24;
+  --status-offer-bg: rgba(52, 211, 153, 0.22);
+  --status-offer-text: #34D399;
+  --status-rejected-bg: rgba(248, 113, 113, 0.22);
+  --status-rejected-text: #F87171;
+  --status-ghosted-bg: rgba(167, 139, 250, 0.22);
+  --status-ghosted-text: #A78BFA;
 
   /* Grid lines - dark mode */
-  --grid-line: rgba(255, 255, 255, 0.15);
+  --grid-line: rgba(186, 200, 177, 0.12);
 }
 
 /* ========== BASE STYLES ========== */
 html {
   font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
 }
 
@@ -242,7 +272,53 @@ body {
   letter-spacing: 0.025em;
 }
 
-/* ========== STATUS PILLS ========== */
+/* ========== STATUS CELLS (fill entire cell) ========== */
+.status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  transition: all var(--transition-fast);
+}
+
+.status-cell-saved {
+  background-color: var(--status-saved-bg);
+  color: var(--status-saved-text);
+}
+
+.status-cell-applied {
+  background-color: var(--status-applied-bg);
+  color: var(--status-applied-text);
+}
+
+.status-cell-interviewing {
+  background-color: var(--status-interviewing-bg);
+  color: var(--status-interviewing-text);
+}
+
+.status-cell-offer {
+  background-color: var(--status-offer-bg);
+  color: var(--status-offer-text);
+}
+
+.status-cell-rejected {
+  background-color: var(--status-rejected-bg);
+  color: var(--status-rejected-text);
+}
+
+.status-cell-ghosted {
+  background-color: var(--status-ghosted-bg);
+  color: var(--status-ghosted-text);
+}
+
+/* ========== STATUS PILLS (for non-grid use) ========== */
 .pill {
   display: inline-flex;
   align-items: center;
