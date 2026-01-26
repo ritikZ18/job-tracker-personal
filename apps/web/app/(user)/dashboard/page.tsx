@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -80,6 +80,121 @@ function StatusEditor({ value, onValueChange, stopEditing }: any) {
                 <option key={s} value={s}>{s}</option>
             ))}
         </select>
+    );
+}
+
+function DateEditor({ value, onValueChange, stopEditing }: any) {
+    const [date, setDate] = useState<Date>(() => {
+        return value ? new Date(value) : new Date();
+    });
+    // Used for navigation
+    const [viewDate, setViewDate] = useState<Date>(() => {
+        return value ? new Date(value) : new Date();
+    });
+
+    // Calendar logic
+    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+    const firstDayOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+
+    const changeMonth = (offset: number) => {
+        setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1));
+    };
+
+    const handleSelect = (day: number) => {
+        const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+        onValueChange(newDate.toISOString());
+        stopEditing();
+    };
+
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) {
+                stopEditing();
+            }
+        };
+
+        // Use mousedown to capture the event before other click handlers might interfere
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [stopEditing]);
+
+    return (
+        <div
+            ref={ref}
+            className="absolute top-0 left-0 z-50 p-4 rounded-xl shadow-2xl backdrop-blur-xl border border-white/20"
+            style={{
+                backgroundColor: 'rgba(20, 20, 22, 0.85)',
+                color: '#fff',
+                width: '250px',
+                marginTop: '25px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+                <button
+                    onClick={() => changeMonth(-1)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <div className="font-semibold text-lg">
+                    {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+                </div>
+                <button
+                    onClick={() => changeMonth(1)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
+
+            {/* Grid */}
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                    <div key={d} className="text-xs text-white/50 font-medium uppercase">{d}</div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center">
+                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                    <div key={`empty-${i}`} />
+                ))}
+
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const d = i + 1;
+                    const isSelected = date.getDate() === d && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+                    const isToday = new Date().getDate() === d && new Date().getMonth() === viewDate.getMonth() && new Date().getFullYear() === viewDate.getFullYear();
+
+                    return (
+                        <button
+                            key={d}
+                            onClick={() => handleSelect(d)}
+                            className={`
+                                w-8 h-8 flex items-center justify-center rounded-full text-sm transition-all
+                                ${isSelected ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50' : 'hover:bg-white/10'}
+                                ${isToday && !isSelected ? 'border border-blue-400 text-blue-400' : ''}
+                            `}
+                        >
+                            {d}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
@@ -210,13 +325,19 @@ export default function DashboardPage() {
             field: 'appliedAt',
             headerName: 'APPLIED',
             valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
-            width: 90,
+            width: 140,
+            editable: true,
+            cellEditor: DateEditor,
+            cellEditorPopup: true,
         },
         {
             field: 'rejectedAt',
             headerName: 'REJECTED',
             valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
-            width: 90,
+            width: 140,
+            editable: true,
+            cellEditor: DateEditor,
+            cellEditorPopup: true,
         },
         {
             field: 'jobUrl',

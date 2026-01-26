@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import IORedis from 'ioredis';
+import { Redis } from 'ioredis';
 import { chromium } from 'playwright';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -53,7 +53,7 @@ const pool = new pg.Pool({
 const db = drizzle(pool);
 
 // Redis connection
-const redis = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
 });
 
@@ -76,7 +76,7 @@ async function extractWithFetch(url: string): Promise<ExtractedData | null> {
         const response = await fetch(url, {
             headers: {
                 'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             },
         });
 
@@ -92,13 +92,55 @@ async function extractWithFetch(url: string): Promise<ExtractedData | null> {
 }
 
 async function extractWithPlaywright(url: string): Promise<ExtractedData | null> {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+        headless: true,
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+        ],
+    });
     try {
-        const page = await browser.newPage();
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const context = await browser.newContext({
+            userAgent:
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            viewport: { width: 1920, height: 1080 },
+            locale: 'en-US',
+            timezoneId: 'America/New_York',
+            deviceScaleFactor: 1,
+        });
 
-        // Wait a bit for dynamic content
-        await page.waitForTimeout(2000);
+        // Evasion: Remove webdriver property
+        await context.addInitScript(() => {
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+        });
+
+        const page = await context.newPage();
+
+        // Randomize mouse movement slightly? No, keeping it simple for now but waiting for load.
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+        // Wait a bit for dynamic content / hydration
+        await page.waitForTimeout(3000);
+
+        // Scroll to bottom to trigger lazy loading
+        await page.evaluate(async () => {
+            await new Promise<void>((resolve) => {
+                let totalHeight = 0;
+                const distance = 100;
+                const timer = setInterval(() => {
+                    const scrollHeight = document.body.scrollHeight;
+                    window.scrollBy(0, distance);
+                    totalHeight += distance;
+                    if (totalHeight >= scrollHeight) {
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
+        });
 
         const html = await page.content();
         return parseHtml(html, url);
@@ -119,7 +161,7 @@ function parseHtml(html: string, url?: string): ExtractedData {
     );
     if (jsonLdMatch) {
         try {
-            const jsonLd = JSON.parse(jsonLdMatch[1]);
+            const jsonLd = JSON.parse(jsonLdMatch[1]!);
             if (jsonLd['@type'] === 'JobPosting' || jsonLd.title) {
                 result.title = jsonLd.title || jsonLd.name;
                 result.company =
@@ -169,7 +211,7 @@ function parseHtml(html: string, url?: string): ExtractedData {
         );
         if (twitterMatch) {
             // Remove @ and capitalize
-            const name = twitterMatch[1].replace(/^@/, '');
+            const name = twitterMatch[1]!.replace(/^@/, '');
             result.company = name.charAt(0).toUpperCase() + name.slice(1);
         }
     }
@@ -242,7 +284,7 @@ function parseHtml(html: string, url?: string): ExtractedData {
     if (!result.title) {
         const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
         if (titleMatch) {
-            result.title = titleMatch[1].trim();
+            result.title = titleMatch[1]!.trim();
         }
     }
 
@@ -251,14 +293,14 @@ function parseHtml(html: string, url?: string): ExtractedData {
         const titleParts = result.title.split(/\s*[\|–—-]\s*/);
         if (titleParts.length >= 2) {
             // Usually company is the last part
-            const potentialCompany = titleParts[titleParts.length - 1].trim();
+            const potentialCompany = titleParts[titleParts.length - 1]!.trim();
             // Avoid common non-company suffixes
             const nonCompanyPatterns = /^(careers?|jobs?|hiring|apply|work|linkedin|indeed|glassdoor)/i;
             if (!nonCompanyPatterns.test(potentialCompany)) {
                 result.company = potentialCompany;
                 // If title was just "Company | Company", use first part as title
                 if (titleParts.length === 2) {
-                    result.title = titleParts[0].trim();
+                    result.title = titleParts[0]!.trim();
                 }
             }
         }
@@ -277,7 +319,7 @@ function parseHtml(html: string, url?: string): ExtractedData {
         // Greenhouse location
         if (!result.location) {
             const ghLocation = html.match(/class=["']location[^"']*["'][^>]*>([^<]+)</i);
-            if (ghLocation) result.location = ghLocation[1].trim();
+            if (ghLocation) result.location = ghLocation[1]!.trim();
         }
 
         // Greenhouse content sections - "What you'll do" and "What you need"
