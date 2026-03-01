@@ -33,7 +33,9 @@ interface CompanyDetail {
     crawlStatus: string | null;
     crawlSchedule: string;
     isTarget: boolean;
-    lastCrawlAt: string | null;
+    logoUrl: string | null;
+    heroImageUrl: string | null;
+    rootDomain: string | null;
     stats: {
         total: number;
         open: number;
@@ -56,6 +58,8 @@ interface Job {
     isRemote: boolean;
     seniority: string | null;
     salaryRange: string | null;
+    qualityScore: string | null;
+    parseMethod: string | null;
 }
 
 export default function CompanyDetailPage() {
@@ -119,12 +123,25 @@ export default function CompanyDetailPage() {
             <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
                 {/* Company Header */}
                 <section className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                        <div>
-                            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.25rem' }}>{company.name}</h2>
-                            <a href={company.careerUrl} target="_blank" rel="noopener" style={{ fontSize: '0.85rem', color: 'var(--color-accent)' }}>
-                                {company.careerUrl}
-                            </a>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                            {company.logoUrl ? (
+                                <img
+                                    src={company.logoUrl}
+                                    alt={company.name}
+                                    style={{ width: '56px', height: '56px', borderRadius: '12px', objectFit: 'contain', background: 'white', border: '1px solid var(--glass-border)' }}
+                                />
+                            ) : (
+                                <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: 'var(--color-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Briefcase size={24} style={{ color: 'var(--color-text-tertiary)' }} />
+                                </div>
+                            )}
+                            <div>
+                                <h2 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.25rem' }}>{company.name}</h2>
+                                <a href={company.careerUrl} target="_blank" rel="noopener" style={{ fontSize: '0.85rem', color: 'var(--color-accent)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    {company.careerUrl} <ExternalLink size={12} />
+                                </a>
+                            </div>
                         </div>
                         <button
                             className="btn"
@@ -203,7 +220,7 @@ export default function CompanyDetailPage() {
                                         <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Title</th>
                                         <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Location</th>
                                         <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Team</th>
-                                        <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Type</th>
+                                        <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Source / Quality</th>
                                         <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>First Seen</th>
                                         <th style={{ padding: '0.6rem 0.5rem' }}></th>
                                     </tr>
@@ -225,7 +242,21 @@ export default function CompanyDetailPage() {
                                             </td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.jobLocation || '—'}</td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.jobTeam || '—'}</td>
-                                            <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.employmentType || '—'}</td>
+                                            <td style={{ padding: '0.6rem 0.5rem' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>
+                                                        {job.parseMethod || 'HTML'}
+                                                    </span>
+                                                    {job.qualityScore && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                            <div style={{ width: '40px', height: '4px', background: 'var(--glass-border)', borderRadius: '2px', overflow: 'hidden' }}>
+                                                                <div style={{ width: `${Number(job.qualityScore) * 100}%`, height: '100%', background: Number(job.qualityScore) > 0.7 ? 'var(--color-success)' : Number(job.qualityScore) > 0.4 ? 'var(--color-accent)' : 'var(--color-danger)' }} />
+                                                            </div>
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{Math.round(Number(job.qualityScore) * 100)}%</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontSize: '0.8rem' }}>{new Date(job.firstSeenAt).toLocaleDateString()}</td>
                                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>
                                                 <button

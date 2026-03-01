@@ -2,13 +2,22 @@
 
 interface CompanyLogoProps {
     name: string;
+    logoUrl?: string | null;
     domain?: string; // Optional explicit domain for favicon
     size?: number;
     className?: string;
     style?: React.CSSProperties;
 }
 
-export function CompanyLogo({ name, domain, size = 24, className = '', style = {} }: CompanyLogoProps) {
+export function CompanyLogo({ name, logoUrl, domain, size = 24, className = '', style = {} }: CompanyLogoProps) {
+    if (logoUrl) {
+        return (
+            <div className={className} style={{ ...style, width: size, height: size, borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', border: '1px solid var(--glass-border)' }}>
+                <img src={logoUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
+        );
+    }
+
     const n = name.toLowerCase();
 
     // Premium SVGs for top companies (High Fidelity)

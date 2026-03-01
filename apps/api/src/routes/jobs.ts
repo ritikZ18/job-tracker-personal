@@ -72,10 +72,11 @@ router.get('/', async (req: Request, res: Response) => {
         const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
         // Count
-        const [{ count }] = await db
+        const countResult = await db
             .select({ count: sql<number>`count(*)::int` })
             .from(schema.jobs)
             .where(whereClause);
+        const count = countResult[0]?.count || 0;
 
         // Query
         const jobs = await db
@@ -98,6 +99,8 @@ router.get('/', async (req: Request, res: Response) => {
                 seniority: schema.jobs.seniority,
                 isRemote: schema.jobs.isRemote,
                 tags: schema.jobs.tags,
+                qualityScore: schema.jobs.qualityScore,
+                parseMethod: schema.jobs.parseMethod,
                 companyName: schema.companies.name,
             })
             .from(schema.jobs)
@@ -141,10 +144,12 @@ router.get('/:slug', async (req: Request, res: Response) => {
                 seniority: schema.jobs.seniority,
                 isRemote: schema.jobs.isRemote,
                 tags: schema.jobs.tags,
+                qualityScore: schema.jobs.qualityScore,
+                parseMethod: schema.jobs.parseMethod,
             })
             .from(schema.jobs)
             .leftJoin(schema.companies, eq(schema.jobs.companyId, schema.companies.id))
-            .where(eq(schema.jobs.jobSlug, req.params.slug))
+            .where(eq(schema.jobs.jobSlug, req.params.slug as string))
             .limit(1);
 
         if (!job) {
@@ -173,7 +178,7 @@ router.post('/:slug/save', async (req: Request, res: Response) => {
             .select()
             .from(schema.jobs)
             .leftJoin(schema.companies, eq(schema.jobs.companyId, schema.companies.id))
-            .where(eq(schema.jobs.jobSlug, req.params.slug))
+            .where(eq(schema.jobs.jobSlug, req.params.slug as string))
             .limit(1);
 
         if (!job) {

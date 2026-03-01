@@ -1,16 +1,17 @@
-import type { Metadata, Viewport } from 'next';
-import './globals.css';
-import 'ag-grid-community/styles/ag-grid.css';
-import { Providers } from './providers';
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+import "ag-grid-community/styles/ag-grid.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: 'Job Tracker - Track Your Applications',
-  description: 'Excel-like job application tracking system with premium Earthy Minimalist design',
-  manifest: '/manifest.json',
+  title: "Job Tracker - Track Your Applications",
+  description:
+    "Excel-like job application tracking system with premium Earthy Minimalist design",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: 'Job Tracker',
+    statusBarStyle: "default",
+    title: "Job Tracker",
   },
   formatDetection: {
     telephone: false,
@@ -19,15 +20,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F4F1EA' }, // Bone
-    { media: '(prefers-color-scheme: dark)', color: '#12100E' },  // Obsidian Earth
+    { media: "(prefers-color-scheme: light)", color: "#F4F1EA" }, // Bone
+    { media: "(prefers-color-scheme: dark)", color: "#12100E" }, // Obsidian Earth
   ],
-  width: 'device-width',
+  width: "device-width",
   initialScale: 1,
   maximumScale: 1,
 };
 
-import { Preloader } from './components/Preloader';
+import { Preloader } from "./components/Preloader";
 
 export default function RootLayout({
   children,
@@ -37,8 +38,17 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"

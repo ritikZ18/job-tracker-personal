@@ -10,7 +10,7 @@ router.use(authenticate);
 // GET /crawls — recent crawl runs
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const { companyId, status, limit = '20' } = req.query;
+        const { companyId, status, limit = '10', offset = '0' } = req.query;
         const conditions = [];
 
         // Only show crawls for the user's companies
@@ -20,7 +20,7 @@ router.get('/', async (req: Request, res: Response) => {
             .where(eq(schema.companies.userId, req.user!.id));
 
         if (userCompanyIds.length === 0) {
-            return res.json([]);
+            return res.json({ crawls: [], total: 0 });
         }
 
         conditions.push(
@@ -37,11 +37,18 @@ router.get('/', async (req: Request, res: Response) => {
             conditions.push(eq(schema.crawlRuns.status, status as any));
         }
 
+        const totalResult = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(schema.crawlRuns)
+            .where(and(...conditions));
+        const total = totalResult[0]?.count || 0;
+
         const crawls = await db
             .select({
                 id: schema.crawlRuns.id,
                 companyId: schema.crawlRuns.companyId,
                 companyName: schema.companies.name,
+                companyLogoUrl: schema.companies.logoUrl,
                 status: schema.crawlRuns.status,
                 startedAt: schema.crawlRuns.startedAt,
                 completedAt: schema.crawlRuns.completedAt,
@@ -57,11 +64,49 @@ router.get('/', async (req: Request, res: Response) => {
             .leftJoin(schema.companies, eq(schema.crawlRuns.companyId, schema.companies.id))
             .where(and(...conditions))
             .orderBy(desc(schema.crawlRuns.createdAt))
-            .limit(parseInt(limit as string, 10));
+            .limit(parseInt(limit as string, 10))
+            .offset(parseInt(offset as string, 10));
 
-        return res.json(crawls);
+        return res.json({ crawls, total });
     } catch (error) {
         console.error('List crawls error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /crawls/:id — remove a crawl run
+router.delete('/:id', async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        // Verify the crawl belongs to the user
+        const [crawl] = await db
+            .select({
+                id: schema.crawlRuns.id,
+                companyId: schema.crawlRuns.companyId,
+            })
+            .from(schema.crawlRuns)
+            .where(eq(schema.crawlRuns.id, id))
+            .limit(1);
+
+        if (!crawl) {
+            return res.status(404).json({ error: 'Crawl run not found' });
+        }
+
+        const [company] = await db
+            .select({ id: schema.companies.id })
+            .from(schema.companies)
+            .where(and(eq(schema.companies.id, crawl.companyId), eq(schema.companies.userId, req.user!.id)))
+            .limit(1);
+
+        if (!company) {
+            return res.status(403).json({ error: 'Unauthorized to delete this crawl' });
+        }
+
+        await db.delete(schema.crawlRuns).where(eq(schema.crawlRuns.id, id));
+
+        return res.status(204).send();
+    } catch (error) {
+        console.error('Delete crawl error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -69,10 +114,11 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /crawls/:id — crawl run detail with logs
 router.get('/:id', async (req: Request, res: Response) => {
     try {
+        const id = req.params.id as string;
         const [crawl] = await db
             .select()
             .from(schema.crawlRuns)
-            .where(eq(schema.crawlRuns.id, req.params.id))
+            .where(eq(schema.crawlRuns.id, id))
             .limit(1);
 
         if (!crawl) {
@@ -93,7 +139,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    const crawlRunId = req.params.id;
+    const crawlRunId = req.params.id as string;
     const subscriber = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
     const channel = `crawl:${crawlRunId}`;

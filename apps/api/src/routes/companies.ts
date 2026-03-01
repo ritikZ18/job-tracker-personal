@@ -20,6 +20,7 @@ router.use(authenticate);
 const AddCompanySchema = z.object({
     careerUrl: z.string().url(),
     name: z.string().optional(),
+    discoverySource: z.enum(['DIRECT', 'WEB']).optional().default('DIRECT'),
     preferences: z.object({
         maxAgeDays: z.number().optional(),
         category: z.string().optional().nullable(),
@@ -31,6 +32,7 @@ const BulkAddSchema = z.object({
         careerUrl: z.string().url(),
         name: z.string().optional(),
     })).min(1).max(100),
+    discoverySource: z.enum(['DIRECT', 'WEB']).optional().default('DIRECT'),
     preferences: z.object({
         maxAgeDays: z.number().optional(),
         category: z.string().optional().nullable(),
@@ -117,6 +119,7 @@ router.post('/', async (req: Request, res: Response) => {
                 name: companyName,
                 careerUrl,
                 sourcePlatform: platform,
+                discoverySource: parsed.data.discoverySource,
                 crawlStatus: 'QUEUED',
             })
             .returning();
@@ -181,6 +184,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
                     name: companyName,
                     careerUrl: entry.careerUrl,
                     sourcePlatform: platform,
+                    discoverySource: parsed.data.discoverySource,
                     crawlStatus: 'QUEUED',
                 })
                 .returning();

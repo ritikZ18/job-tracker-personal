@@ -74,26 +74,41 @@ echo -e "${GREEN}✔${NC} Dependencies installed"
 
 # ── Step 3: Database Migration ─────────────────────────────
 echo ""
-echo -e "${YELLOW}🗄️  Step 3/4: Pushing database schema...${NC}"
+echo -e "${YELLOW}🗄️  Step 3/4: Applying database migrations...${NC}"
 
-# Find the latest migration SQL file
 MIGRATION_DIR="$ROOT_DIR/apps/api/drizzle"
-if [ -d "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql 1>/dev/null 2>&1; then
-    LATEST_SQL=$(ls -t "$MIGRATION_DIR"/*.sql | head -1)
-    echo "   Applying migration: $(basename $LATEST_SQL)"
-    cat "$LATEST_SQL" | docker exec -i job-tracking-postgres psql -U postgres -d job_tracking 2>&1 \
-        | grep -v "already exists" | grep -v "^$" | sed 's/^/   /' || true
-else
-    echo "   No migration files found, generating..."
-    cd "$ROOT_DIR/apps/api"
-    npx drizzle-kit generate 2>&1 | grep -E "(table|migration|✓)" | sed 's/^/   /' || true
-    LATEST_SQL=$(ls -t "$MIGRATION_DIR"/*.sql 2>/dev/null | head -1)
-    if [ -n "$LATEST_SQL" ]; then
-        cat "$LATEST_SQL" | docker exec -i job-tracking-postgres psql -U postgres -d job_tracking 2>&1 \
-            | grep -v "already exists" | grep -v "^$" | sed 's/^/   /' || true
-    fi
-    cd "$ROOT_DIR"
+
+# Generate migrations if none exist yet
+if [ ! -d "$MIGRATION_DIR" ] || ! ls "$MIGRATION_DIR"/*.sql 1>/dev/null 2>&1; then
+    echo "   No migration files found, generating from schema..."
+    (cd "$ROOT_DIR/apps/api" && npx drizzle-kit generate 2>&1 | grep -E "(table|migration|✓)" | sed 's/^/   /')
 fi
+
+# Apply ALL migrations in lexicographic (chronological) order — 0000, 0001, 0002, ...
+# We grep "already exists" out of *informational* output but keep real errors visible.
+shopt -s nullglob
+MIGRATION_FILES=("$MIGRATION_DIR"/*.sql)
+shopt -u nullglob
+
+if [ ${#MIGRATION_FILES[@]} -eq 0 ]; then
+    echo -e "${RED}❌ No migration files to apply${NC}"
+    exit 1
+fi
+
+# Sort by filename (drizzle prefixes with 0000_, 0001_, ...)
+IFS=$'\n' MIGRATION_FILES=($(printf '%s\n' "${MIGRATION_FILES[@]}" | sort))
+unset IFS
+
+for SQL_FILE in "${MIGRATION_FILES[@]}"; do
+    echo "   ▸ $(basename "$SQL_FILE")"
+    OUTPUT=$(docker exec -i job-tracking-postgres psql -v ON_ERROR_STOP=0 -U postgres -d job_tracking < "$SQL_FILE" 2>&1)
+    # Filter "already exists" notices (idempotent re-run); show real errors.
+    echo "$OUTPUT" | grep -vE "(already exists|^$)" | sed 's/^/     /' || true
+    if echo "$OUTPUT" | grep -qE "^(ERROR|FATAL):" | grep -vE "already exists"; then
+        echo -e "${YELLOW}     ⚠ Some statements failed — see above${NC}"
+    fi
+done
+
 echo -e "${GREEN}✔${NC} Database schema up to date"
 
 # ── Step 4: Start All Services ─────────────────────────────

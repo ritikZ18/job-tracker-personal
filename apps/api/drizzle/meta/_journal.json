@@ -15,6 +15,13 @@
       "when": 1772393521802,
       "tag": "0001_violet_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772395109315,
+      "tag": "0002_silly_ares",
+      "breakpoints": true
     }
   ]
 }
