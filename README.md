@@ -1,92 +1,93 @@
-# Job Tracker
+# CareerCrawl
 
-A modern job application tracking system with an Excel-like grid interface, AI-powered job posting analysis, and a Tesla-inspired premium UI.
+A full-stack career page crawler and job application tracker with a Tesla-inspired premium glassmorphic UI.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## Features
 
-- **Excel-like Grid** - Edit applications inline with AG Grid
-- **AI Job Analysis** - Paste a job URL to extract title, company, and requirements
-- **Dark/Light Mode** - Tesla-inspired premium UI with theme toggle
-- **PWA** - Installable on mobile and desktop
-- **Real-time Updates** - Status changes, toast notifications
+- **🕷️ Career Page Crawler** — Paste any career page URL; auto-discovers jobs via Greenhouse/Lever APIs or Playwright DOM scraping
+- **📊 Kanban Board** — Drag-and-drop application tracker (Saved → Applied → Interviewing → Offer → Rejected)
+- **🔍 Global Search** — Real-time search across companies and jobs
+- **📡 Live Terminal** — SSE-powered crawler terminal showing real-time progress
+- **🏢 Company Management** — Track multiple companies, trigger re-crawls, view stats
+- **🌗 Dark/Light Mode** — Industrial glassmorphic UI with theme toggle
+- **🔒 Auth Optional** — Works locally without Supabase; real auth in production
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14, React, AG Grid, Tailwind |
-| Backend | Express.js, Drizzle ORM |
-| Worker | BullMQ, Playwright |
-| Database | PostgreSQL |
-| Queue | Redis |
-| Infrastructure | Docker Compose |
+| Frontend | Next.js 16, React 19, TanStack Query |
+| Backend | Express.js, Drizzle ORM, Zod |
+| Worker | BullMQ, Playwright (Chromium) |
+| Database | PostgreSQL 16 |
+| Queue | Redis 7 |
+| Auth | Supabase (optional for local dev) |
+| Infra | Docker Compose, Turborepo |
 
 ## Quick Start
 
 ```bash
-# Clone and install
 git clone <repo-url>
 cd job-tracking
 npm install
-
-# Start everything
-./start.sh
+./start.sh        # Starts everything (Docker + API + Web + Worker)
 ```
 
-Or manually:
+**Open:** http://localhost:3000
 
-```bash
-# 1. Start infrastructure
-cd infra && docker compose up -d
-
-# 2. Push database schema
-cd apps/api && npx drizzle-kit push
-
-# 3. Start dev servers
-npm run dev              # Terminal 1: API + Web
-cd apps/worker && npm run dev  # Terminal 2: Worker
-```
-
-**Access:** http://localhost:3000
+**Stop:** `Ctrl+C` or `./kill.sh`
 
 ## Project Structure
 
 ```
 ├── apps/
-│   ├── api/          # Express API server (port 3001)
-│   ├── web/          # Next.js frontend (port 3000)
-│   └── worker/       # BullMQ job processor
+│   ├── api/           # Express API (port 3001)
+│   │   └── src/
+│   │       ├── routes/    # companies, jobs, crawls, search, applications
+│   │       ├── db/        # Drizzle schema (13 tables)
+│   │       ├── middleware/ # Auth (Supabase + dev bypass)
+│   │       └── lib/       # Events emitter
+│   ├── web/           # Next.js frontend (port 3000)
+│   │   └── app/
+│   │       ├── (user)/    # Dashboard, Companies, My Jobs, Search
+│   │       └── (auth)/    # Login, Register
+│   └── worker/        # BullMQ crawler
+│       └── src/       # 2-phase: discover → extract → save
 ├── packages/
-│   └── types/        # Shared TypeScript types
-└── infra/            # Docker Compose (Postgres, Redis)
+│   └── types/         # Shared TypeScript types
+├── infra/             # Docker Compose (Postgres + Redis)
+├── docs/              # API reference, deployment guide
+├── start.sh           # One-command full startup
+└── kill.sh            # One-command shutdown
 ```
 
 ## Environment Variables
 
-Create `.env` files in each app directory:
-
 **apps/api/.env**
-```
+```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/job_tracking
 REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-secret-key
 CORS_ORIGIN=http://localhost:3000
+# Optional (for production auth):
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=your-key
 ```
 
 **apps/web/.env.local**
-```
+```env
 NEXT_PUBLIC_API_URL=http://localhost:3001
+# Optional:
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-key
 ```
 
-## API Documentation
+## Documentation
 
-See [docs/API.md](docs/API.md) for full API reference.
-
-## Deployment
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Render deployment guide.
+- [API Reference](docs/API.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Job Analysis Pipeline](docs/JOB_ANALYSIS.md)
 
 ## License
 

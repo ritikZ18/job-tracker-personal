@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-    const { user, isLoading, logout } = useAuth();
+    const { user, isLoading, signOut } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -51,7 +51,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                     </div>
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-[var(--color-muted-foreground)]">{user?.email}</span>
-                        <button onClick={logout} className="btn btn-ghost text-sm">
+                        <button onClick={signOut} className="btn btn-ghost text-sm">
                             Sign out
                         </button>
                     </div>

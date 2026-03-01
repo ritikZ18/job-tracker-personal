@@ -1,11 +1,15 @@
 import express from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
+
 import authRoutes from './routes/auth.js';
 import applicationsRoutes from './routes/applications.js';
 import jobAnalysesRoutes from './routes/job-analyses.js';
 import viewsRoutes from './routes/views.js';
 import observabilityRoutes from './routes/observability.js';
+import companiesRoutes from './routes/companies.js';
+import jobsRoutes from './routes/jobs.js';
+import crawlsRoutes from './routes/crawls.js';
+import searchRoutes from './routes/search.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,7 +22,6 @@ app.use(
     })
 );
 app.use(express.json());
-app.use(cookieParser());
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -31,6 +34,10 @@ app.use('/applications', applicationsRoutes);
 app.use('/job-analyses', jobAnalysesRoutes);
 app.use('/views', viewsRoutes);
 app.use('/observability', observabilityRoutes);
+app.use('/companies', companiesRoutes);
+app.use('/jobs', jobsRoutes);
+app.use('/crawls', crawlsRoutes);
+app.use('/search', searchRoutes);
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

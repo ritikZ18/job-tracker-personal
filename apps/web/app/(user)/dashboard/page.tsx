@@ -1,786 +1,394 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { AgGridReact } from 'ag-grid-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { api } from '../../../lib/api';
+import { fetcher } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
-import { useTheme } from '../../../lib/theme';
-import type { ColDef, CellValueChangedEvent, ICellRendererParams } from 'ag-grid-community';
+import Link from 'next/link';
 
-const STATUS_OPTIONS = ['SAVED', 'APPLIED', 'INTERVIEWING', 'OFFER', 'REJECTED', 'GHOSTED'] as const;
+// ============================================================
+// TYPES
+// ============================================================
 
-// Icons
-const Icons = {
-    sun: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-        </svg>
-    ),
-    moon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    ),
-    plus: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" d="M12 4v16m-8-8h16" />
-        </svg>
-    ),
-    link: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-        </svg>
-    ),
-    trash: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-    ),
-    search: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8" />
-            <path strokeLinecap="round" d="m21 21-4.35-4.35" />
-        </svg>
-    ),
-    external: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6m4-3h6v6m-11 5L21 3" />
-        </svg>
-    ),
-};
-
-function StatusCell({ value }: { value: string }) {
-    return (
-        <div className={`status-cell status-cell-${value.toLowerCase()}`}>
-            {value}
-        </div>
-    );
+interface Company {
+    id: string;
+    name: string;
+    careerUrl: string;
+    sourcePlatform: string;
+    crawlStatus: string | null;
+    lastCrawlAt: string | null;
+    jobCount: number;
+    newJobCount: number;
 }
 
-function StatusPill({ value }: { value: string }) {
-    return <span className={`pill pill-${value.toLowerCase()}`}>{value}</span>;
+interface CrawlRun {
+    id: string;
+    companyId: string;
+    companyName: string;
+    status: string;
+    jobsDiscovered: number;
+    jobsUpdated: number;
+    errorCount: number;
+    durationMs: number | null;
+    createdAt: string;
 }
 
-function StatusEditor({ value, onValueChange, stopEditing }: any) {
-    return (
-        <select
-            value={value}
-            onChange={(e) => {
-                onValueChange(e.target.value);
-                stopEditing();
-            }}
-            className="w-full h-full text-sm bg-transparent border-none outline-none cursor-pointer"
-            style={{ backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
-            autoFocus
-        >
-            {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-            ))}
-        </select>
-    );
+interface CrawlLogEntry {
+    type: string;
+    message?: string;
+    timestamp?: number;
+    jobsDiscovered?: number;
+    jobsUpdated?: number;
+    errorCount?: number;
+    durationMs?: number;
 }
 
-function DateEditor({ value, onValueChange, stopEditing }: any) {
-    const [date, setDate] = useState<Date>(() => {
-        return value ? new Date(value) : new Date();
-    });
-    // Used for navigation
-    const [viewDate, setViewDate] = useState<Date>(() => {
-        return value ? new Date(value) : new Date();
-    });
-
-    // Calendar logic
-    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
-    const firstDayOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
-
-    const changeMonth = (offset: number) => {
-        setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1));
-    };
-
-    const handleSelect = (day: number) => {
-        const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-        onValueChange(newDate.toISOString());
-        stopEditing();
-    };
-
-    const monthNames = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ];
-
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (ref.current && !ref.current.contains(event.target as Node)) {
-                stopEditing();
-            }
-        };
-
-        // Use mousedown to capture the event before other click handlers might interfere
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [stopEditing]);
-
-    return (
-        <div
-            ref={ref}
-            className="absolute top-0 left-0 z-50 p-4 rounded-xl shadow-2xl backdrop-blur-xl border border-white/20"
-            style={{
-                backgroundColor: 'rgba(20, 20, 22, 0.85)',
-                color: '#fff',
-                width: '250px',
-                marginTop: '25px'
-            }}
-            onClick={(e) => e.stopPropagation()}
-        >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <button
-                    onClick={() => changeMonth(-1)}
-                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <div className="font-semibold text-lg">
-                    {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
-                </div>
-                <button
-                    onClick={() => changeMonth(1)}
-                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
-            </div>
-
-            {/* Grid */}
-            <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                    <div key={d} className="text-xs text-white/50 font-medium uppercase">{d}</div>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center">
-                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                    <div key={`empty-${i}`} />
-                ))}
-
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const d = i + 1;
-                    const isSelected = date.getDate() === d && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-                    const isToday = new Date().getDate() === d && new Date().getMonth() === viewDate.getMonth() && new Date().getFullYear() === viewDate.getFullYear();
-
-                    return (
-                        <button
-                            key={d}
-                            onClick={() => handleSelect(d)}
-                            className={`
-                                w-8 h-8 flex items-center justify-center rounded-full text-sm transition-all
-                                ${isSelected ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50' : 'hover:bg-white/10'}
-                                ${isToday && !isSelected ? 'border border-blue-400 text-blue-400' : ''}
-                            `}
-                        >
-                            {d}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
+// ============================================================
+// DASHBOARD PAGE
+// ============================================================
 
 export default function DashboardPage() {
-    const { user, logout } = useAuth();
-    const { theme, toggleTheme } = useTheme();
+    const { user, signOut } = useAuth();
     const queryClient = useQueryClient();
-    const gridRef = useRef<AgGridReact>(null);
-    const [statusFilter, setStatusFilter] = useState<string>('');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showAnalyzeModal, setShowAnalyzeModal] = useState(false);
+    const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
-    // Fetch applications
-    const { data: applications = [], isLoading, error } = useQuery({
-        queryKey: ['applications', statusFilter, searchQuery],
-        queryFn: () => api.getApplications({ status: statusFilter || undefined, search: searchQuery || undefined }),
-    });
-
-    if (error) {
-        toast.error('Failed to load applications');
-    }
-
-    // KPI calculations
-    const kpis = useMemo(() => {
-        const now = new Date();
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-        return {
-            thisWeek: applications.filter((a: any) => new Date(a.createdAt) >= weekAgo).length,
-            inProgress: applications.filter((a: any) => ['APPLIED', 'INTERVIEWING'].includes(a.status)).length,
-            interviews: applications.filter((a: any) => a.status === 'INTERVIEWING').length,
-            offers: applications.filter((a: any) => a.status === 'OFFER').length,
-            rejected: applications.filter((a: any) => a.status === 'REJECTED').length,
-        };
-    }, [applications]);
-
-    // Mutations with toast feedback
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateApplication(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['applications'] });
-            toast.success('Saved.');
-        },
-        onError: (err) => {
-            toast.error('Failed to update');
-            api.logError('Update application failed', { error: String(err) });
-        },
-    });
-
-    const statusMutation = useMutation({
-        mutationFn: ({ id, status }: { id: string; status: string }) => api.updateStatus(id, status),
-        onSuccess: (_data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['applications'] });
-            toast.success(variables.status === 'REJECTED' ? 'Marked as rejected.' : 'Status updated.');
-        },
-        onError: (err) => {
-            toast.error('Failed to update status');
-            api.logError('Update status failed', { error: String(err) });
-        },
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: (id: string) => api.deleteApplication(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['applications'] });
-            toast.success('Deleted.');
-        },
-        onError: (err) => {
-            toast.error('Failed to delete');
-            api.logError('Delete application failed', { error: String(err) });
-        },
-    });
-
-    // Column definitions
-    const columnDefs = useMemo<ColDef[]>(() => [
-        {
-            headerName: '#',
-            width: 60,
-            valueGetter: (params) => (params.node?.rowIndex ?? 0) + 1,
-            cellClass: 'text-tertiary text-center',
-            sortable: false,
-            filter: false,
-        },
-        {
-            field: 'company',
-            headerName: 'COMPANY',
-            editable: true,
-            flex: 1,
-            minWidth: 100,
-        },
-        {
-            field: 'jobTitle',
-            headerName: 'ROLE',
-            editable: true,
-            flex: 1.2,
-            minWidth: 160,
-        },
-        {
-            field: 'jobDescription',
-            headerName: 'REQUIREMENTS',
-            editable: true,
-            width: 220,
-            cellRenderer: (params: ICellRendererParams) => {
-                const desc = params.value as string | null;
-                if (!desc) return <span className="text-tertiary">—</span>;
-                const truncated = desc.length > 30 ? desc.substring(0, 30) + '...' : desc;
-                return (
-                    <span
-                        className="text-secondary text-xs cursor-help truncate block"
-                        title={desc}
-                    >
-                        {truncated}
-                    </span>
-                );
-            },
-        },
-        {
-            field: 'status',
-            headerName: 'STATUS',
-            cellRenderer: (params: ICellRendererParams) => <StatusCell value={params.value} />,
-            editable: true,
-            cellEditor: StatusEditor,
-            width: 140,
-            cellStyle: { padding: '4px' },
-        },
-        {
-            field: 'appliedAt',
-            headerName: 'APPLIED',
-            valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
-            width: 140,
-            editable: true,
-            cellEditor: DateEditor,
-            cellEditorPopup: true,
-        },
-        {
-            field: 'rejectedAt',
-            headerName: 'REJECTED',
-            valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '—',
-            width: 140,
-            editable: true,
-            cellEditor: DateEditor,
-            cellEditorPopup: true,
-        },
-        {
-            field: 'jobUrl',
-            headerName: '',
-            width: 40,
-            cellRenderer: (params: ICellRendererParams) =>
-                params.value ? (
-                    <a
-                        href={params.value}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-tertiary hover:text-accent transition-colors"
-                        title="Open job posting"
-                    >
-                        {Icons.external}
-                    </a>
-                ) : null,
-            sortable: false,
-            filter: false,
-        },
-        {
-            headerName: '',
-            width: 40,
-            cellRenderer: (params: ICellRendererParams) => (
-                <button
-                    onClick={() => deleteMutation.mutate(params.data.id)}
-                    className="text-tertiary hover:text-[var(--status-rejected-text)] transition-colors p-1"
-                    title="Delete"
-                >
-                    {Icons.trash}
-                </button>
-            ),
-            sortable: false,
-            filter: false,
-        },
-    ], [deleteMutation]);
-
-    const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-        const { data, colDef, newValue, oldValue } = event;
-        if (newValue === oldValue) return;
-
-        if (colDef.field === 'status') {
-            statusMutation.mutate({ id: data.id, status: newValue });
-        } else if (colDef.field) {
-            updateMutation.mutate({ id: data.id, data: { [colDef.field]: newValue } });
-        }
-    }, [updateMutation, statusMutation]);
-
-    const defaultColDef = useMemo<ColDef>(() => ({
-        sortable: true,
-        filter: true,
-        resizable: true,
-    }), []);
-
-    return (
-        <div className="min-h-screen" style={{ backgroundColor: 'var(--app-bg)' }}>
-            {/* Top Bar */}
-            <header className="bg-surface border-b" style={{ borderColor: 'var(--border-soft)' }}>
-                <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <h1 className="text-lg font-semibold tracking-tight">Job Tracker</h1>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        {/* Search */}
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary">
-                                {Icons.search}
-                            </span>
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="input pl-10 w-56"
-                            />
-                        </div>
-
-                        {/* Actions */}
-                        <button onClick={() => setShowAnalyzeModal(true)} className="btn btn-secondary btn-sm">
-                            {Icons.link}
-                            <span>Analyze link</span>
-                        </button>
-                        <button onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">
-                            {Icons.plus}
-                            <span>Add application</span>
-                        </button>
-
-                        {/* Theme toggle */}
-                        <button
-                            onClick={toggleTheme}
-                            className="btn btn-icon btn-ghost"
-                            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-                        >
-                            {theme === 'light' ? Icons.moon : Icons.sun}
-                        </button>
-
-                        {/* User */}
-                        <div className="flex items-center gap-3 pl-3 ml-1 border-l" style={{ borderColor: 'var(--border-soft)' }}>
-                            <span className="text-sm text-secondary">{user?.email}</span>
-                            <button onClick={logout} className="btn btn-ghost btn-sm">Sign out</button>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <main className="max-w-screen-2xl mx-auto px-6 py-6">
-                {/* KPI Cards */}
-                <div className="grid grid-cols-5 gap-4 mb-6">
-                    <div className="kpi-card">
-                        <div className="kpi-value">{kpis.thisWeek}</div>
-                        <div className="kpi-label">This week</div>
-                    </div>
-                    <div className="kpi-card">
-                        <div className="kpi-value">{kpis.inProgress}</div>
-                        <div className="kpi-label">In progress</div>
-                    </div>
-                    <div className="kpi-card">
-                        <div className="kpi-value">{kpis.interviews}</div>
-                        <div className="kpi-label">Interviews</div>
-                    </div>
-                    <div className="kpi-card">
-                        <div className="kpi-value" style={{ color: 'var(--status-offer-text)' }}>{kpis.offers}</div>
-                        <div className="kpi-label">Offers</div>
-                    </div>
-                    <div className="kpi-card">
-                        <div className="kpi-value" style={{ color: 'var(--status-rejected-text)' }}>{kpis.rejected}</div>
-                        <div className="kpi-label">Rejected</div>
-                    </div>
-                </div>
-
-                {/* Filter Chips */}
-                <div className="flex items-center gap-2 mb-4">
-                    {['', ...STATUS_OPTIONS].map((status) => (
-                        <button
-                            key={status}
-                            onClick={() => setStatusFilter(status)}
-                            className={statusFilter === status ? 'chip chip-active' : 'chip'}
-                        >
-                            {status || 'All'}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Grid */}
-                <div className="ag-theme-tesla" style={{ height: 'calc(100vh - 320px)', minHeight: '400px' }}>
-                    {isLoading ? (
-                        <div className="card p-4 h-full">
-                            <div className="space-y-3">
-                                {[...Array(10)].map((_, i) => (
-                                    <div key={i} className="skeleton h-12 w-full" />
-                                ))}
-                            </div>
-                        </div>
-                    ) : applications.length === 0 ? (
-                        <div className="card h-full">
-                            <div className="empty-state h-full">
-                                <div className="empty-state-icon">{Icons.plus}</div>
-                                <p className="text-secondary mb-4">No applications yet</p>
-                                <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
-                                    Add your first application
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <AgGridReact
-                            ref={gridRef}
-                            rowData={applications}
-                            columnDefs={columnDefs}
-                            defaultColDef={defaultColDef}
-                            onCellValueChanged={onCellValueChanged}
-                            animateRows
-                            rowSelection="multiple"
-                            suppressRowClickSelection
-                            getRowId={(params) => params.data.id}
-                            enterNavigatesVerticallyAfterEdit
-                            singleClickEdit
-                            domLayout="normal"
-                        />
-                    )}
-                </div>
-            </main>
-
-            {showAddModal && <AddApplicationModal onClose={() => setShowAddModal(false)} />}
-            {showAnalyzeModal && <AnalyzeUrlModal onClose={() => setShowAnalyzeModal(false)} />}
-        </div>
-    );
-}
-
-// Add Application Modal
-function AddApplicationModal({ onClose }: { onClose: () => void }) {
-    const queryClient = useQueryClient();
-    const [formData, setFormData] = useState({
-        company: '',
-        jobTitle: '',
-        jobUrl: '',
-        status: 'SAVED' as string,
-    });
+    // URL Input state
+    const [urlInput, setUrlInput] = useState('');
+    const [bulkMode, setBulkMode] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState('');
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+    // Terminal state
+    const [terminalOpen, setTerminalOpen] = useState(false);
+    const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+    const [activeCrawlId, setActiveCrawlId] = useState<string | null>(null);
+    const terminalRef = useRef<HTMLDivElement>(null);
+    const eventSourceRef = useRef<EventSource | null>(null);
+
+    // Theme toggle
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+    }, [theme]);
+
+    // Auto-scroll terminal
+    useEffect(() => {
+        if (terminalRef.current) {
+            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+        }
+    }, [terminalLogs]);
+
+    // Clean up SSE on unmount
+    useEffect(() => {
+        return () => { eventSourceRef.current?.close(); };
+    }, []);
+
+    // Queries
+    const { data: companiesData } = useQuery({
+        queryKey: ['companies'],
+        queryFn: () => fetcher<Company[]>('/companies'),
+        refetchInterval: activeCrawlId ? 3000 : false,
+    });
+
+    const { data: crawlsData } = useQuery({
+        queryKey: ['crawls'],
+        queryFn: () => fetcher<CrawlRun[]>('/crawls?limit=10'),
+        refetchInterval: activeCrawlId ? 3000 : 10000,
+    });
+
+    const companies = companiesData || [];
+    const crawls = crawlsData || [];
+
+    // Stats
+    const totalCompanies = companies.length;
+    const totalJobs = companies.reduce((sum, c) => sum + c.jobCount, 0);
+    const newJobs = companies.reduce((sum, c) => sum + c.newJobCount, 0);
+    const crawlErrors = crawls.filter(c => c.status === 'FAILED').length;
+
+    // SSE connection for live crawl logs
+    const connectSSE = useCallback((crawlRunId: string) => {
+        eventSourceRef.current?.close();
+        setActiveCrawlId(crawlRunId);
+        setTerminalOpen(true);
+        setTerminalLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connecting to crawl stream...`]);
+
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const es = new EventSource(`${apiBase}/crawls/${crawlRunId}/stream`);
+        eventSourceRef.current = es;
+
+        es.onmessage = (event) => {
+            try {
+                const data: CrawlLogEntry = JSON.parse(event.data);
+                if (data.type === 'log' && data.message) {
+                    setTerminalLogs(prev => [...prev, data.message!]);
+                } else if (data.type === 'complete') {
+                    setTerminalLogs(prev => [
+                        ...prev,
+                        `✅ Crawl complete — ${data.jobsDiscovered} discovered, ${data.jobsUpdated} updated, ${data.errorCount} errors (${((data.durationMs || 0) / 1000).toFixed(1)}s)`,
+                    ]);
+                    setActiveCrawlId(null);
+                    queryClient.invalidateQueries({ queryKey: ['companies'] });
+                    queryClient.invalidateQueries({ queryKey: ['crawls'] });
+                    es.close();
+                } else if (data.type === 'error') {
+                    setTerminalLogs(prev => [...prev, `❌ Crawl failed: ${JSON.stringify(data)}`]);
+                    setActiveCrawlId(null);
+                    es.close();
+                }
+            } catch { /* ignore parse errors */ }
+        };
+
+        es.onerror = () => {
+            setTerminalLogs(prev => [...prev, `⚠️ Stream connection lost`]);
+        };
+    }, [queryClient]);
+
+    // Submit URL
+    const handleSubmitUrl = async () => {
+        if (!urlInput.trim()) return;
         setIsSubmitting(true);
 
         try {
-            await api.createApplication(formData);
-            queryClient.invalidateQueries({ queryKey: ['applications'] });
-            toast.success('Application added.');
-            onClose();
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to add application';
-            setError(message);
-            toast.error(message);
-            api.logError('Create application failed', { error: String(err) });
+            if (bulkMode) {
+                const urls = urlInput
+                    .split('\n')
+                    .map(u => u.trim())
+                    .filter(u => u.startsWith('http'));
+
+                const result = await fetcher<(Company & { crawlRunId: string })[]>('/companies/bulk', {
+                    method: 'POST',
+                    body: { urls: urls.map(u => ({ careerUrl: u })) },
+                });
+
+                setTerminalLogs(prev => [...prev, `📦 Bulk submitted ${result.length} companies`]);
+                if (result.length > 0 && result[0]?.crawlRunId) {
+                    connectSSE(result[0]!.crawlRunId);
+                }
+            } else {
+                const result = await fetcher<Company & { crawlRunId: string }>('/companies', {
+                    method: 'POST',
+                    body: { careerUrl: urlInput.trim() },
+                });
+
+                setTerminalLogs(prev => [...prev, `🏢 Added: ${result.name} — crawl queued`]);
+                connectSSE(result.crawlRunId);
+            }
+
+            setUrlInput('');
+            queryClient.invalidateQueries({ queryKey: ['companies'] });
+        } catch (error: any) {
+            setTerminalLogs(prev => [...prev, `❌ Error: ${error.message}`]);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-semibold mb-6">Add application</h2>
+        <div className="min-h-screen" style={{ background: 'var(--color-background)' }}>
+            {/* Header */}
+            <header className="dash-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em' }}>
+                        <span style={{ color: 'var(--color-accent)' }}>Career</span>Crawl
+                    </h1>
+                </div>
 
-                {error && (
-                    <div className="p-3 mb-4 rounded-md text-sm" style={{ backgroundColor: 'var(--status-rejected-bg)', color: 'var(--status-rejected-text)' }}>
-                        {error}
+                <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <Link href="/dashboard" className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>Dashboard</Link>
+                    <Link href="/companies" className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: 'transparent', border: '1px solid var(--glass-border)' }}>Companies</Link>
+                    <Link href="/my-jobs" className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: 'transparent', border: '1px solid var(--glass-border)' }}>My Jobs</Link>
+                    <Link href="/search" className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: 'transparent', border: '1px solid var(--glass-border)' }}>Search</Link>
+
+                    <button
+                        className="btn"
+                        onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+                        style={{ width: '2.2rem', height: '2.2rem', padding: 0, fontSize: '1rem', borderRadius: '50%', background: 'transparent', border: '1px solid var(--glass-border)' }}
+                    >
+                        {theme === 'dark' ? '☀️' : '🌙'}
+                    </button>
+
+                    <div className="avatar" style={{ width: '2rem', height: '2rem', fontSize: '0.8rem' }}>
+                        {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                     </div>
-                )}
+                </nav>
+            </header>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Company</label>
-                        <input
-                            type="text"
-                            value={formData.company}
-                            onChange={(e) => setFormData((f) => ({ ...f, company: e.target.value }))}
-                            className="input"
-                            placeholder="e.g. Google"
-                            required
-                            autoFocus
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Role</label>
-                        <input
-                            type="text"
-                            value={formData.jobTitle}
-                            onChange={(e) => setFormData((f) => ({ ...f, jobTitle: e.target.value }))}
-                            className="input"
-                            placeholder="e.g. Software Engineer"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Job URL <span className="text-tertiary font-normal">(optional)</span></label>
-                        <input
-                            type="url"
-                            value={formData.jobUrl}
-                            onChange={(e) => setFormData((f) => ({ ...f, jobUrl: e.target.value }))}
-                            className="input"
-                            placeholder="https://..."
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-2">Status</label>
-                        <select
-                            value={formData.status}
-                            onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))}
-                            className="input"
-                        >
-                            {STATUS_OPTIONS.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                        <button type="button" onClick={onClose} className="btn btn-secondary flex-1">
-                            Cancel
-                        </button>
-                        <button type="submit" disabled={isSubmitting} className="btn btn-primary flex-1">
-                            {isSubmitting ? 'Saving...' : 'Save'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}
-
-// Analyze URL Modal
-function AnalyzeUrlModal({ onClose }: { onClose: () => void }) {
-    const queryClient = useQueryClient();
-    const [jobUrl, setJobUrl] = useState('');
-    const [status, setStatus] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle');
-    const [result, setResult] = useState<any>(null);
-    const [error, setError] = useState('');
-
-    const startAnalysis = async () => {
-        if (!jobUrl) return;
-        setStatus('analyzing');
-        setError('');
-
-        try {
-            const resp = await api.analyzeUrl(jobUrl);
-            pollAnalysis(resp.jobAnalysisId);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to start analysis';
-            setError(message);
-            toast.error(message);
-            setStatus('error');
-            api.logError('Analyze URL failed', { error: String(err) });
-        }
-    };
-
-    const pollAnalysis = async (id: string) => {
-        let attempts = 0;
-        const maxAttempts = 30;
-
-        const poll = async () => {
-            if (attempts >= maxAttempts) {
-                setError('Analysis timed out');
-                toast.error('Analysis timed out');
-                setStatus('error');
-                return;
-            }
-
-            try {
-                const analysis = await api.getJobAnalysis(id);
-                if (analysis.status === 'DONE') {
-                    setResult(analysis.result);
-                    setStatus('done');
-                    toast.success('Analysis complete.');
-                } else if (analysis.status === 'FAILED') {
-                    setError(analysis.error || 'Analysis failed');
-                    toast.error(analysis.error || 'Analysis failed');
-                    setStatus('error');
-                } else {
-                    attempts++;
-                    setTimeout(poll, 2000);
-                }
-            } catch (err) {
-                setError('Failed to check status');
-                toast.error('Failed to check status');
-                setStatus('error');
-            }
-        };
-
-        poll();
-    };
-
-    const createFromResult = async () => {
-        if (!result) return;
-        try {
-            await api.createApplication({
-                company: result.company || 'Unknown',
-                jobTitle: result.title || 'Unknown',
-                jobUrl,
-                jobDescription: result.description,
-                source: 'ANALYZED',
-            });
-            queryClient.invalidateQueries({ queryKey: ['applications'] });
-            toast.success('Application added.');
-            onClose();
-        } catch (err) {
-            toast.error('Failed to create application');
-            api.logError('Create from analysis failed', { error: String(err) });
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content card w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-semibold mb-6">Analyze link</h2>
-
-                {status === 'idle' && (
-                    <>
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium mb-2">Job Posting URL</label>
+            <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+                {/* URL Input Panel */}
+                <section className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Add Career Page URL</h2>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--color-muted-foreground)', cursor: 'pointer' }}>
                             <input
-                                type="url"
-                                value={jobUrl}
-                                onChange={(e) => setJobUrl(e.target.value)}
-                                className="input"
-                                placeholder="Paste job URL here..."
-                                autoFocus
+                                type="checkbox"
+                                checked={bulkMode}
+                                onChange={e => setBulkMode(e.target.checked)}
+                                style={{ accentColor: 'var(--color-accent)' }}
                             />
-                        </div>
-                        <div className="flex gap-3">
-                            <button type="button" onClick={onClose} className="btn btn-secondary flex-1">
-                                Cancel
-                            </button>
-                            <button onClick={startAnalysis} disabled={!jobUrl} className="btn btn-primary flex-1">
-                                Analyze
-                            </button>
-                        </div>
-                    </>
-                )}
-
-                {status === 'analyzing' && (
-                    <div className="text-center py-12">
-                        <div className="spinner mx-auto mb-4" />
-                        <p className="text-secondary">Analyzing job posting...</p>
+                            Bulk mode
+                        </label>
                     </div>
-                )}
 
-                {status === 'error' && (
-                    <div className="text-center py-8">
-                        <p className="mb-6" style={{ color: 'var(--status-rejected-text)' }}>{error}</p>
-                        <div className="flex gap-3 justify-center">
-                            <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-                            <button onClick={() => setStatus('idle')} className="btn btn-primary">Try again</button>
-                        </div>
+                    {bulkMode ? (
+                        <textarea
+                            className="input"
+                            value={urlInput}
+                            onChange={e => setUrlInput(e.target.value)}
+                            placeholder={'Paste one URL per line:\nhttps://boards.greenhouse.io/company\nhttps://jobs.lever.co/company\nhttps://company.com/careers'}
+                            rows={5}
+                            style={{ resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
+                        />
+                    ) : (
+                        <input
+                            className="input"
+                            type="url"
+                            value={urlInput}
+                            onChange={e => setUrlInput(e.target.value)}
+                            placeholder="https://boards.greenhouse.io/company or any career page URL"
+                            onKeyDown={e => e.key === 'Enter' && handleSubmitUrl()}
+                        />
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                        <button
+                            className="btn"
+                            onClick={handleSubmitUrl}
+                            disabled={isSubmitting || !urlInput.trim()}
+                            style={{ opacity: isSubmitting || !urlInput.trim() ? 0.5 : 1 }}
+                        >
+                            {isSubmitting ? '⏳ Crawling...' : '🔍 Crawl & Discover Jobs'}
+                        </button>
                     </div>
-                )}
+                </section>
 
-                {status === 'done' && result && (
-                    <>
-                        <div className="space-y-4 mb-6">
-                            <div>
-                                <div className="detail-label">Role</div>
-                                <div className="detail-value text-lg">{result.title || '—'}</div>
-                            </div>
-                            <div>
-                                <div className="detail-label">Company</div>
-                                <div className="detail-value text-lg">{result.company || '—'}</div>
-                            </div>
-                            {result.description && (
-                                <div>
-                                    <div className="detail-label">Description</div>
-                                    <p className="text-sm text-secondary mt-1 line-clamp-4">{result.description}</p>
-                                </div>
+                {/* KPI Stats */}
+                <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <Link href="/companies" style={{ textDecoration: 'none' }}>
+                        <div className="kpi-card">
+                            <span className="kpi-label">Companies</span>
+                            <span className="kpi-value">{totalCompanies}</span>
+                        </div>
+                    </Link>
+                    <Link href="/search" style={{ textDecoration: 'none' }}>
+                        <div className="kpi-card">
+                            <span className="kpi-label">Jobs Found</span>
+                            <span className="kpi-value">{totalJobs}</span>
+                        </div>
+                    </Link>
+                    <div className="kpi-card">
+                        <span className="kpi-label">New This Week</span>
+                        <span className="kpi-value" style={{ color: 'var(--color-accent)' }}>{newJobs}</span>
+                    </div>
+                    <div className="kpi-card">
+                        <span className="kpi-label">Crawl Errors</span>
+                        <span className="kpi-value" style={{ color: crawlErrors > 0 ? '#ef4444' : undefined }}>{crawlErrors}</span>
+                    </div>
+                </section>
+
+                {/* Recent Crawls */}
+                <section className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>Recent Crawls</h2>
+                    {crawls.length === 0 ? (
+                        <p style={{ color: 'var(--color-muted-foreground)', fontSize: '0.9rem' }}>No crawls yet. Paste a career page URL above to get started.</p>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                        <th style={{ textAlign: 'left', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Company</th>
+                                        <th style={{ textAlign: 'left', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Status</th>
+                                        <th style={{ textAlign: 'right', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Jobs</th>
+                                        <th style={{ textAlign: 'right', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Updated</th>
+                                        <th style={{ textAlign: 'right', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Errors</th>
+                                        <th style={{ textAlign: 'right', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>Duration</th>
+                                        <th style={{ textAlign: 'right', padding: '0.5rem', color: 'var(--color-muted-foreground)', fontWeight: 500 }}>When</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {crawls.map(crawl => (
+                                        <tr key={crawl.id} style={{ borderBottom: '1px solid var(--glass-border-subtle, rgba(255,255,255,0.04))' }}>
+                                            <td style={{ padding: '0.5rem', fontWeight: 500 }}>{crawl.companyName}</td>
+                                            <td style={{ padding: '0.5rem' }}>
+                                                <span className={`status-pill ${crawl.status === 'SUCCESS' ? 'status-pill--offer' : crawl.status === 'FAILED' ? 'status-pill--rejected' : crawl.status === 'RUNNING' ? 'status-pill--interviewing' : 'status-pill--saved'}`}>
+                                                    <span className="status-dot"></span>
+                                                    {crawl.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>{crawl.jobsDiscovered}</td>
+                                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>{crawl.jobsUpdated}</td>
+                                            <td style={{ padding: '0.5rem', textAlign: 'right', color: crawl.errorCount > 0 ? '#ef4444' : undefined }}>{crawl.errorCount}</td>
+                                            <td style={{ padding: '0.5rem', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                                                {crawl.durationMs ? `${(crawl.durationMs / 1000).toFixed(1)}s` : '—'}
+                                            </td>
+                                            <td style={{ padding: '0.5rem', textAlign: 'right', color: 'var(--color-muted-foreground)' }}>
+                                                {new Date(crawl.createdAt).toLocaleDateString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </section>
+
+                {/* Crawler Terminal */}
+                <section className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <button
+                        onClick={() => setTerminalOpen(o => !o)}
+                        style={{
+                            width: '100%',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '0.75rem 1.5rem',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--color-foreground)',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            fontWeight: 500,
+                        }}
+                    >
+                        <span>
+                            🖥️ Crawler Terminal
+                            {activeCrawlId && <span style={{ marginLeft: '0.5rem', color: 'var(--color-accent)', animation: 'pulse 1.5s infinite' }}>● LIVE</span>}
+                        </span>
+                        <span style={{ transform: terminalOpen ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }}>▼</span>
+                    </button>
+
+                    {terminalOpen && (
+                        <div
+                            ref={terminalRef}
+                            style={{
+                                background: '#0a0a0a',
+                                color: '#00ff41',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.78rem',
+                                lineHeight: 1.6,
+                                padding: '1rem 1.5rem',
+                                maxHeight: '320px',
+                                overflowY: 'auto',
+                                borderTop: '1px solid rgba(0,255,65,0.15)',
+                            }}
+                        >
+                            {terminalLogs.length === 0 ? (
+                                <div style={{ color: '#555' }}>$ Waiting for crawl jobs... Submit a URL to start.</div>
+                            ) : (
+                                terminalLogs.map((log, i) => (
+                                    <div key={i} style={{
+                                        color: log.includes('[ERROR]') || log.includes('❌') ? '#ef4444'
+                                            : log.includes('[DONE]') || log.includes('✅') ? '#22c55e'
+                                                : log.includes('[NEW]') ? '#38bdf8'
+                                                    : log.includes('[PROGRESS]') ? '#a78bfa'
+                                                        : log.includes('[WARN]') ? '#fbbf24'
+                                                            : '#00ff41',
+                                    }}>
+                                        {log}
+                                    </div>
+                                ))
                             )}
                         </div>
-                        <div className="flex gap-3">
-                            <button onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
-                            <button onClick={createFromResult} className="btn btn-primary flex-1">Add application</button>
-                        </div>
-                    </>
-                )}
-            </div>
+                    )}
+                </section>
+            </main>
         </div>
     );
 }
