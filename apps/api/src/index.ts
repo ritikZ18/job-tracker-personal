@@ -10,6 +10,7 @@ import companiesRoutes from './routes/companies.js';
 import jobsRoutes from './routes/jobs.js';
 import crawlsRoutes from './routes/crawls.js';
 import searchRoutes from './routes/search.js';
+import analyzeRoutes from './routes/analyze.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -24,6 +25,10 @@ app.use(
 app.use(express.json());
 
 // Health check
+app.get('/', (_req, res) => {
+    res.json({ status: 'ok', service: 'CareerCrawl API' });
+});
+
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
 });
@@ -38,6 +43,7 @@ app.use('/companies', companiesRoutes);
 app.use('/jobs', jobsRoutes);
 app.use('/crawls', crawlsRoutes);
 app.use('/search', searchRoutes);
+app.use('/analyze', analyzeRoutes);
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

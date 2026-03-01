@@ -206,6 +206,7 @@ interface AnalyzeJobData {
     jobAnalysisId: string;
     jobUrl: string;
     userId: string;
+    companyOverride?: string;
 }
 
 interface ExtractedData {
@@ -304,17 +305,30 @@ function parseHtml(html: string, url?: string): ExtractedData {
     const result: ExtractedData = {};
 
     // Try JSON-LD first
-    const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
-    if (jsonLdMatch) {
-        try {
-            const jsonLd = JSON.parse(jsonLdMatch[1]!);
-            if (jsonLd['@type'] === 'JobPosting' || jsonLd.title) {
-                result.title = jsonLd.title || jsonLd.name;
-                result.company = jsonLd.hiringOrganization?.name || jsonLd.company || jsonLd.employer?.name;
-                result.description = jsonLd.description;
-                result.jobId = jsonLd.identifier?.value || jsonLd.id;
-            }
-        } catch { /* JSON-LD parse failed */ }
+    const jsonLdBlocks = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    if (jsonLdBlocks) {
+        for (const block of jsonLdBlocks) {
+            try {
+                const content = block.match(/>([\s\S]*?)</)?.[1];
+                if (!content) continue;
+                const jsonLd = JSON.parse(content);
+
+                // Handle both single object and array
+                const items = Array.isArray(jsonLd) ? jsonLd : [jsonLd];
+                for (const item of items) {
+                    if (item['@type'] === 'JobPosting' || item.title || item.jobTitle) {
+                        result.title = result.title || item.title || item.jobTitle || item.name;
+                        result.company = result.company || item.hiringOrganization?.name || item.company || item.employer?.name;
+                        result.description = result.description || item.description;
+                        result.jobId = result.jobId || item.identifier?.value || item.id;
+                        if (item.jobLocation) {
+                            const loc = item.jobLocation;
+                            result.location = result.location || (typeof loc === 'string' ? loc : loc.address?.addressLocality || loc.name);
+                        }
+                    }
+                }
+            } catch { /* JSON-LD parse failed */ }
+        }
     }
 
     // Try OpenGraph
@@ -508,6 +522,11 @@ async function discoverWithPlaywright(careerUrl: string, crawlRunId: string): Pr
                 if (!text || text.length < 3 || text.length > 200) continue;
                 if (href.includes('#') && !href.includes('/jobs/') && !href.includes('/positions/')) continue;
                 if (href.match(/\.(pdf|png|jpg|css|js)$/i)) continue;
+
+                // Strict filter for junk links/navigation
+                const junkRegex = /^(faq|about|privacy|terms|cookie|legal|help|contact|support|press|blog|learn more|working at|benefits|perks|values|diversity|equity|inclusion|investor|news|events|social|apply now|view job|find out more)$/i;
+                if (junkRegex.test(text)) continue;
+
                 if (seen.has(href)) continue;
 
                 // Heuristics: looks like a job link
@@ -592,7 +611,12 @@ const crawlWorker = new Worker<CrawlJobData>(
         await db.update(crawlRuns).set({ status: 'RUNNING', startedAt: new Date() }).where(eq(crawlRuns.id, crawlRunId));
         await db.update(companies).set({ crawlStatus: 'RUNNING', updatedAt: new Date() }).where(eq(companies.id, companyId));
 
-        await publishLog(crawlRunId, `[START] Crawling career page for company ${companyId}`);
+        await publishLog(crawlRunId, `Starting crawl for ${careerUrl}`);
+        if (preferences?.maxAgeDays) {
+            await publishLog(crawlRunId, `[fetch] Age filter: last ${preferences.maxAgeDays} days`);
+        } else {
+            await publishLog(crawlRunId, `[fetch] Age filter: none`);
+        }
 
         // Emit event
         await db.insert(events).values({
@@ -600,7 +624,7 @@ const crawlWorker = new Worker<CrawlJobData>(
             entityId: crawlRunId,
             entityType: 'crawl_run',
             correlationId: crawlRunId,
-            metadata: { companyId, careerUrl, platform },
+            metadata: { companyId, careerUrl, platform, preferences },
         });
 
         let jobsDiscovered = 0;
@@ -614,10 +638,13 @@ const crawlWorker = new Worker<CrawlJobData>(
             const companyName = company?.name || 'unknown';
 
             // PHASE 1: Discover job links
+            await publishLog(crawlRunId, `[crawl] Status → crawling`);
             const discovered = await discoverJobLinks(careerUrl, platform, crawlRunId);
 
             if (discovered.length === 0) {
-                await publishLog(crawlRunId, `[WARN] No job links found on career page`);
+                await publishLog(crawlRunId, `[done] No jobs found.`);
+            } else {
+                await publishLog(crawlRunId, `[parse] ${discovered.length} job listings found`);
             }
 
             // PHASE 2: Process each discovered job (batch-save as we go)
@@ -654,7 +681,7 @@ const crawlWorker = new Worker<CrawlJobData>(
                                 changeType: 'UPDATED',
                             });
                             jobsUpdated++;
-                            await publishLog(crawlRunId, `[UPDATED] ${disc.title} (${disc.location || 'N/A'})`);
+                            await publishLog(crawlRunId, `[db] updated "${disc.title}" @ ${disc.location || 'N/A'}`);
                         }
                     } else {
                         // NEW JOB: insert immediately (batch-safe)
@@ -698,7 +725,7 @@ const crawlWorker = new Worker<CrawlJobData>(
                         }
 
                         jobsDiscovered++;
-                        await publishLog(crawlRunId, `[NEW] ${disc.title} | ${disc.location || 'N/A'} | ${disc.team || ''}`);
+                        await publishLog(crawlRunId, `[db] saved "${disc.title}" @ ${disc.location || 'N/A'} [${disc.team || 'General'}]`);
                     }
 
                     // Update crawl run progress after each batch of 5
@@ -710,7 +737,7 @@ const crawlWorker = new Worker<CrawlJobData>(
                             pagesFetched,
                         }).where(eq(crawlRuns.id, crawlRunId));
 
-                        await publishLog(crawlRunId, `[PROGRESS] ${i + 1}/${discovered.length} processed | ${jobsDiscovered} new | ${jobsUpdated} updated`);
+                        await publishLog(crawlRunId, `[db] checkpoint: ${jobsDiscovered + jobsUpdated} jobs persisted so far`);
                     }
 
                     // Rate limiting: small delay between jobs
@@ -750,8 +777,6 @@ const crawlWorker = new Worker<CrawlJobData>(
                 metadata: { jobsDiscovered, jobsUpdated, durationMs, errorCount },
             });
 
-            await publishLog(crawlRunId, `[DONE] Crawl complete in ${(durationMs / 1000).toFixed(1)}s — ${jobsDiscovered} new, ${jobsUpdated} updated, ${errorCount} errors`);
-
             // Signal completion via SSE
             publisher.publish(`crawl:${crawlRunId}`, JSON.stringify({
                 type: 'complete',
@@ -760,6 +785,8 @@ const crawlWorker = new Worker<CrawlJobData>(
                 errorCount,
                 durationMs,
             }));
+
+            await publishLog(crawlRunId, `[done] ✓ Crawl complete — ${jobsDiscovered} new, ${jobsUpdated} updated in ${(durationMs / 1000).toFixed(1)}s`);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -801,8 +828,8 @@ const crawlWorker = new Worker<CrawlJobData>(
 const analyzeWorker = new Worker<AnalyzeJobData>(
     'analyze-job',
     async (job: Job<AnalyzeJobData>) => {
-        const { jobAnalysisId, jobUrl } = job.data;
-        console.log(`Processing job analysis: ${jobAnalysisId}`);
+        const { jobAnalysisId, jobUrl, companyOverride } = job.data;
+        console.log(`Processing job analysis: ${jobAnalysisId} for ${jobUrl}`);
 
         await db.update(jobAnalyses).set({ status: 'RUNNING', updatedAt: new Date() }).where(eq(jobAnalyses.id, jobAnalysisId));
 
@@ -812,6 +839,11 @@ const analyzeWorker = new Worker<AnalyzeJobData>(
                 console.log('Fetch failed or incomplete, trying Playwright...');
                 result = await extractWithPlaywright(jobUrl);
             }
+
+            if (result && companyOverride && !result.company) {
+                result.company = companyOverride;
+            }
+
             if (!result || (!result.title && !result.company && !result.description)) {
                 throw new Error('Could not extract any data from the URL');
             }

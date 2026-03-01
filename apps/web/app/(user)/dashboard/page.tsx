@@ -5,6 +5,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetcher } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import Link from 'next/link';
+import { CompanyLogo } from '../../components/CompanyLogo';
+import { CrawlerTerminal } from '../../components/CrawlerTerminal';
+import { getDomainFromUrl } from '../../../lib/utils';
+import {
+    Search,
+    Globe,
+    Briefcase,
+    Clock,
+    AlertCircle,
+    Plus,
+    Layers,
+    Calendar,
+    Moon,
+    Sun,
+    Terminal,
+    Filter,
+    LogOut
+} from 'lucide-react';
 
 // ============================================================
 // TYPES
@@ -57,6 +75,10 @@ export default function DashboardPage() {
     const [bulkMode, setBulkMode] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Filter Preferences
+    const [maxAgeDays, setMaxAgeDays] = useState<number>(30); // Default 30 days
+    const [category, setCategory] = useState<string>('all');
+
     // Terminal state
     const [terminalOpen, setTerminalOpen] = useState(false);
     const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
@@ -108,7 +130,7 @@ export default function DashboardPage() {
         eventSourceRef.current?.close();
         setActiveCrawlId(crawlRunId);
         setTerminalOpen(true);
-        setTerminalLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connecting to crawl stream...`]);
+        // Silently connect without boilerplate logs
 
         const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const es = new EventSource(`${apiBase}/crawls/${crawlRunId}/stream`);
@@ -120,16 +142,12 @@ export default function DashboardPage() {
                 if (data.type === 'log' && data.message) {
                     setTerminalLogs(prev => [...prev, data.message!]);
                 } else if (data.type === 'complete') {
-                    setTerminalLogs(prev => [
-                        ...prev,
-                        `✅ Crawl complete — ${data.jobsDiscovered} discovered, ${data.jobsUpdated} updated, ${data.errorCount} errors (${((data.durationMs || 0) / 1000).toFixed(1)}s)`,
-                    ]);
                     setActiveCrawlId(null);
                     queryClient.invalidateQueries({ queryKey: ['companies'] });
                     queryClient.invalidateQueries({ queryKey: ['crawls'] });
                     es.close();
                 } else if (data.type === 'error') {
-                    setTerminalLogs(prev => [...prev, `❌ Crawl failed: ${JSON.stringify(data)}`]);
+                    setTerminalLogs(prev => [...prev, `[error] Crawl failed`]);
                     setActiveCrawlId(null);
                     es.close();
                 }
@@ -137,7 +155,7 @@ export default function DashboardPage() {
         };
 
         es.onerror = () => {
-            setTerminalLogs(prev => [...prev, `⚠️ Stream connection lost`]);
+            // Silently handle retry
         };
     }, [queryClient]);
 
@@ -165,10 +183,12 @@ export default function DashboardPage() {
             } else {
                 const result = await fetcher<Company & { crawlRunId: string }>('/companies', {
                     method: 'POST',
-                    body: { careerUrl: urlInput.trim() },
+                    body: {
+                        careerUrl: urlInput.trim(),
+                        preferences: { maxAgeDays, category: category === 'all' ? null : category }
+                    },
                 });
 
-                setTerminalLogs(prev => [...prev, `🏢 Added: ${result.name} — crawl queued`]);
                 connectSSE(result.crawlRunId);
             }
 
@@ -198,14 +218,14 @@ export default function DashboardPage() {
                     <Link href="/search" className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: 'transparent', border: '1px solid var(--glass-border)' }}>Search</Link>
 
                     <button
-                        className="btn"
+                        className="btn-icon"
                         onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-                        style={{ width: '2.2rem', height: '2.2rem', padding: 0, fontSize: '1rem', borderRadius: '50%', background: 'transparent', border: '1px solid var(--glass-border)' }}
+                        title="Toggle theme"
                     >
-                        {theme === 'dark' ? '☀️' : '🌙'}
+                        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
                     </button>
 
-                    <div className="avatar" style={{ width: '2rem', height: '2rem', fontSize: '0.8rem' }}>
+                    <div className="avatar" style={{ width: '2rem', height: '2rem', fontSize: '0.8rem', background: 'var(--color-accent)', color: 'white' }}>
                         {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                     </div>
                 </nav>
@@ -232,29 +252,68 @@ export default function DashboardPage() {
                             className="input"
                             value={urlInput}
                             onChange={e => setUrlInput(e.target.value)}
-                            placeholder={'Paste one URL per line:\nhttps://boards.greenhouse.io/company\nhttps://jobs.lever.co/company\nhttps://company.com/careers'}
-                            rows={5}
+                            placeholder={'https://boards.greenhouse.io/company\nhttps://jobs.lever.co/company\nhttps://company.com/careers'}
+                            rows={4}
                             style={{ resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
                         />
                     ) : (
-                        <input
-                            className="input"
-                            type="url"
-                            value={urlInput}
-                            onChange={e => setUrlInput(e.target.value)}
-                            placeholder="https://boards.greenhouse.io/company or any career page URL"
-                            onKeyDown={e => e.key === 'Enter' && handleSubmitUrl()}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <Globe size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                            <input
+                                className="input"
+                                type="url"
+                                value={urlInput}
+                                onChange={e => setUrlInput(e.target.value)}
+                                placeholder="Enter career page URL..."
+                                style={{ paddingLeft: '3rem' }}
+                                onKeyDown={e => e.key === 'Enter' && handleSubmitUrl()}
+                            />
+                        </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem', alignItems: 'center' }}>
+                        {/* Preferences */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Clock size={16} style={{ color: 'var(--color-text-secondary)' }} />
+                            <select
+                                className="input"
+                                style={{ padding: '0.4rem 0.8rem', width: 'auto', fontSize: '0.8rem' }}
+                                value={maxAgeDays}
+                                onChange={(e) => setMaxAgeDays(Number(e.target.value))}
+                            >
+                                <option value={7}>Last 7 days</option>
+                                <option value={14}>Last 14 days</option>
+                                <option value={30}>Last 30 days</option>
+                                <option value={60}>Last 60 days</option>
+                                <option value={90}>Last 90 days</option>
+                            </select>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Filter size={16} style={{ color: 'var(--color-text-secondary)' }} />
+                            <select
+                                className="input"
+                                style={{ padding: '0.4rem 0.8rem', width: 'auto', fontSize: '0.8rem' }}
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                            >
+                                <option value="all">All Categories</option>
+                                <option value="engineering">Engineering</option>
+                                <option value="product">Product</option>
+                                <option value="design">Design</option>
+                                <option value="marketing">Marketing</option>
+                                <option value="sales">Sales</option>
+                            </select>
+                        </div>
+
                         <button
-                            className="btn"
+                            className="btn btn-primary"
                             onClick={handleSubmitUrl}
                             disabled={isSubmitting || !urlInput.trim()}
-                            style={{ opacity: isSubmitting || !urlInput.trim() ? 0.5 : 1 }}
+                            style={{ marginLeft: 'auto' }}
                         >
-                            {isSubmitting ? '⏳ Crawling...' : '🔍 Crawl & Discover Jobs'}
+                            {isSubmitting ? <Clock className="animate-spin" size={18} /> : <Search size={18} />}
+                            <span>{isSubmitting ? 'Crawling...' : 'Crawl Jobs'}</span>
                         </button>
                     </div>
                 </section>
@@ -263,23 +322,35 @@ export default function DashboardPage() {
                 <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                     <Link href="/companies" style={{ textDecoration: 'none' }}>
                         <div className="kpi-card">
-                            <span className="kpi-label">Companies</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <span className="kpi-label">Companies</span>
+                                <Globe size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+                            </div>
                             <span className="kpi-value">{totalCompanies}</span>
                         </div>
                     </Link>
                     <Link href="/search" style={{ textDecoration: 'none' }}>
                         <div className="kpi-card">
-                            <span className="kpi-label">Jobs Found</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <span className="kpi-label">Jobs Found</span>
+                                <Briefcase size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+                            </div>
                             <span className="kpi-value">{totalJobs}</span>
                         </div>
                     </Link>
                     <div className="kpi-card">
-                        <span className="kpi-label">New This Week</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">New This Week</span>
+                            <Calendar size={16} style={{ color: 'var(--color-accent)' }} />
+                        </div>
                         <span className="kpi-value" style={{ color: 'var(--color-accent)' }}>{newJobs}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Crawl Errors</span>
-                        <span className="kpi-value" style={{ color: crawlErrors > 0 ? '#ef4444' : undefined }}>{crawlErrors}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">Crawl Errors</span>
+                            <AlertCircle size={16} style={{ color: crawlErrors > 0 ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }} />
+                        </div>
+                        <span className="kpi-value" style={{ color: crawlErrors > 0 ? 'var(--color-danger)' : undefined }}>{crawlErrors}</span>
                     </div>
                 </section>
 
@@ -305,7 +376,15 @@ export default function DashboardPage() {
                                 <tbody>
                                     {crawls.map(crawl => (
                                         <tr key={crawl.id} style={{ borderBottom: '1px solid var(--glass-border-subtle, rgba(255,255,255,0.04))' }}>
-                                            <td style={{ padding: '0.5rem', fontWeight: 500 }}>{crawl.companyName}</td>
+                                            <td style={{ padding: '0.8rem 0.5rem', fontWeight: 500 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                    <CompanyLogo
+                                                        name={crawl.companyName}
+                                                        size={20}
+                                                    />
+                                                    {crawl.companyName}
+                                                </div>
+                                            </td>
                                             <td style={{ padding: '0.5rem' }}>
                                                 <span className={`status-pill ${crawl.status === 'SUCCESS' ? 'status-pill--offer' : crawl.status === 'FAILED' ? 'status-pill--rejected' : crawl.status === 'RUNNING' ? 'status-pill--interviewing' : 'status-pill--saved'}`}>
                                                     <span className="status-dot"></span>
@@ -329,65 +408,12 @@ export default function DashboardPage() {
                     )}
                 </section>
 
-                {/* Crawler Terminal */}
-                <section className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-                    <button
-                        onClick={() => setTerminalOpen(o => !o)}
-                        style={{
-                            width: '100%',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '0.75rem 1.5rem',
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--color-foreground)',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            fontWeight: 500,
-                        }}
-                    >
-                        <span>
-                            🖥️ Crawler Terminal
-                            {activeCrawlId && <span style={{ marginLeft: '0.5rem', color: 'var(--color-accent)', animation: 'pulse 1.5s infinite' }}>● LIVE</span>}
-                        </span>
-                        <span style={{ transform: terminalOpen ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }}>▼</span>
-                    </button>
-
-                    {terminalOpen && (
-                        <div
-                            ref={terminalRef}
-                            style={{
-                                background: '#0a0a0a',
-                                color: '#00ff41',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '0.78rem',
-                                lineHeight: 1.6,
-                                padding: '1rem 1.5rem',
-                                maxHeight: '320px',
-                                overflowY: 'auto',
-                                borderTop: '1px solid rgba(0,255,65,0.15)',
-                            }}
-                        >
-                            {terminalLogs.length === 0 ? (
-                                <div style={{ color: '#555' }}>$ Waiting for crawl jobs... Submit a URL to start.</div>
-                            ) : (
-                                terminalLogs.map((log, i) => (
-                                    <div key={i} style={{
-                                        color: log.includes('[ERROR]') || log.includes('❌') ? '#ef4444'
-                                            : log.includes('[DONE]') || log.includes('✅') ? '#22c55e'
-                                                : log.includes('[NEW]') ? '#38bdf8'
-                                                    : log.includes('[PROGRESS]') ? '#a78bfa'
-                                                        : log.includes('[WARN]') ? '#fbbf24'
-                                                            : '#00ff41',
-                                    }}>
-                                        {log}
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    )}
-                </section>
+                <CrawlerTerminal
+                    logs={terminalLogs}
+                    isLive={!!activeCrawlId}
+                    isOpen={terminalOpen}
+                    onToggle={() => setTerminalOpen(!terminalOpen)}
+                />
             </main>
         </div>
     );

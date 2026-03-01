@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 
+import { detectPlatform, guessCompanyName } from '../lib/platforms.js';
+
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
 });
@@ -18,6 +20,10 @@ router.use(authenticate);
 const AddCompanySchema = z.object({
     careerUrl: z.string().url(),
     name: z.string().optional(),
+    preferences: z.object({
+        maxAgeDays: z.number().optional(),
+        category: z.string().optional().nullable(),
+    }).optional(),
 });
 
 const BulkAddSchema = z.object({
@@ -25,32 +31,13 @@ const BulkAddSchema = z.object({
         careerUrl: z.string().url(),
         name: z.string().optional(),
     })).min(1).max(100),
+    preferences: z.object({
+        maxAgeDays: z.number().optional(),
+        category: z.string().optional().nullable(),
+    }).optional(),
 });
 
-/** Detect ATS platform from URL */
-function detectPlatform(url: string): 'GREENHOUSE' | 'LEVER' | 'WORKDAY' | 'ICIMS' | 'CUSTOM' | 'UNKNOWN' {
-    const lower = url.toLowerCase();
-    if (lower.includes('greenhouse.io') || lower.includes('boards.greenhouse')) return 'GREENHOUSE';
-    if (lower.includes('lever.co') || lower.includes('jobs.lever')) return 'LEVER';
-    if (lower.includes('myworkdayjobs') || lower.includes('workday.com')) return 'WORKDAY';
-    if (lower.includes('icims.com')) return 'ICIMS';
-    return 'UNKNOWN';
-}
-
-/** Extract company name from URL if not provided */
-function guessCompanyName(url: string): string {
-    try {
-        const hostname = new URL(url).hostname;
-        // e.g., "jobs.lever.co/companyname" → "companyname"
-        const parts = new URL(url).pathname.split('/').filter(Boolean);
-        if (hostname.includes('lever.co') && parts[0]) return parts[0];
-        if (hostname.includes('greenhouse.io') && parts[0]) return parts[0];
-        // Generic: use hostname minus extension
-        return hostname.replace(/^(www|jobs|careers?|boards?)\./, '').split('.')[0] || 'Unknown';
-    } catch {
-        return 'Unknown';
-    }
-}
+// Removed local detectPlatform and guessCompanyName implementations as they are now in ../lib/platforms.js
 
 // GET /companies — list user's companies
 router.get('/', async (req: Request, res: Response) => {
@@ -85,7 +72,7 @@ router.get('/', async (req: Request, res: Response) => {
                     .from(schema.jobs)
                     .where(
                         and(
-                            eq(schema.jobs.companyId, company.id),
+                            eq(schema.jobs.companyId, company.id as string),
                             sql`${schema.jobs.firstSeenAt} >= NOW() - INTERVAL '7 days'`
                         )
                     );
@@ -123,7 +110,7 @@ router.post('/', async (req: Request, res: Response) => {
         const platform = detectPlatform(careerUrl);
         const companyName = name || guessCompanyName(careerUrl);
 
-        const [company] = await db
+        const results = await db
             .insert(schema.companies)
             .values({
                 userId: req.user!.id,
@@ -134,6 +121,11 @@ router.post('/', async (req: Request, res: Response) => {
             })
             .returning();
 
+        const company = results[0];
+        if (!company) {
+            return res.status(500).json({ error: 'Failed to create company' });
+        }
+
         await emitEvent('COMPANY_ADDED', company.id, 'company', {
             name: companyName,
             careerUrl,
@@ -141,7 +133,7 @@ router.post('/', async (req: Request, res: Response) => {
         });
 
         // Auto-enqueue crawl
-        const [crawlRun] = await db
+        const crawlResults = await db
             .insert(schema.crawlRuns)
             .values({
                 companyId: company.id,
@@ -149,11 +141,17 @@ router.post('/', async (req: Request, res: Response) => {
             })
             .returning();
 
+        const crawlRun = crawlResults[0];
+        if (!crawlRun) {
+            return res.status(500).json({ error: 'Failed to create crawl run' });
+        }
+
         await crawlQueue.add('crawl', {
             companyId: company.id,
             careerUrl,
             crawlRunId: crawlRun.id,
             platform,
+            preferences: parsed.data.preferences,
         });
 
         return res.status(201).json({ ...company, crawlRunId: crawlRun.id });
@@ -176,7 +174,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
             const platform = detectPlatform(entry.careerUrl);
             const companyName = entry.name || guessCompanyName(entry.careerUrl);
 
-            const [company] = await db
+            const companyResults = await db
                 .insert(schema.companies)
                 .values({
                     userId: req.user!.id,
@@ -187,16 +185,23 @@ router.post('/bulk', async (req: Request, res: Response) => {
                 })
                 .returning();
 
-            const [crawlRun] = await db
+            const company = companyResults[0];
+            if (!company) continue;
+
+            const crawlRunResults = await db
                 .insert(schema.crawlRuns)
                 .values({ companyId: company.id, status: 'QUEUED' })
                 .returning();
+
+            const crawlRun = crawlRunResults[0];
+            if (!crawlRun) continue;
 
             await crawlQueue.add('crawl', {
                 companyId: company.id,
                 careerUrl: entry.careerUrl,
                 crawlRunId: crawlRun.id,
                 platform,
+                preferences: parsed.data.preferences,
             });
 
             results.push({ ...company, crawlRunId: crawlRun.id });
@@ -212,17 +217,18 @@ router.post('/bulk', async (req: Request, res: Response) => {
 // GET /companies/:id — detail
 router.get('/:id', async (req: Request, res: Response) => {
     try {
-        const [company] = await db
+        const results = await db
             .select()
             .from(schema.companies)
             .where(
                 and(
-                    eq(schema.companies.id, req.params.id),
+                    eq(schema.companies.id, req.params.id as string),
                     eq(schema.companies.userId, req.user!.id)
                 )
             )
             .limit(1);
 
+        const company = results[0];
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
@@ -236,7 +242,7 @@ router.get('/:id', async (req: Request, res: Response) => {
                 newThisWeek: sql<number>`count(*) filter (where first_seen_at >= NOW() - INTERVAL '7 days')::int`,
             })
             .from(schema.jobs)
-            .where(eq(schema.jobs.companyId, company.id));
+            .where(eq(schema.jobs.companyId, company.id as string));
 
         return res.json({ ...company, stats });
     } catch (error) {
@@ -260,7 +266,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
             })
             .where(
                 and(
-                    eq(schema.companies.id, req.params.id),
+                    eq(schema.companies.id, req.params.id as string),
                     eq(schema.companies.userId, req.user!.id)
                 )
             )
@@ -284,7 +290,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
             .delete(schema.companies)
             .where(
                 and(
-                    eq(schema.companies.id, req.params.id),
+                    eq(schema.companies.id, req.params.id as string),
                     eq(schema.companies.userId, req.user!.id)
                 )
             )
@@ -309,7 +315,7 @@ router.post('/:id/crawl', async (req: Request, res: Response) => {
             .from(schema.companies)
             .where(
                 and(
-                    eq(schema.companies.id, req.params.id),
+                    eq(schema.companies.id, req.params.id as string),
                     eq(schema.companies.userId, req.user!.id)
                 )
             )
@@ -319,15 +325,20 @@ router.post('/:id/crawl', async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        const [crawlRun] = await db
+        const crawlResults = await db
             .insert(schema.crawlRuns)
             .values({ companyId: company.id, status: 'QUEUED' })
             .returning();
 
+        const crawlRun = crawlResults[0];
+        if (!crawlRun) {
+            return res.status(500).json({ error: 'Failed to create crawl run' });
+        }
+
         await db
             .update(schema.companies)
             .set({ crawlStatus: 'QUEUED', updatedAt: new Date() })
-            .where(eq(schema.companies.id, company.id));
+            .where(eq(schema.companies.id, company.id as string));
 
         await crawlQueue.add('crawl', {
             companyId: company.id,

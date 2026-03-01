@@ -9,13 +9,25 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   DESIGN TOKENS
+   DESIGN TOKENS — "Earthy Minimalist"
+   Burnt sienna, Terracotta, Soft Bone, and Sandy Neutrals.
    ============================================================ */
-
 :root {
-  /* === Typography === */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  /* Core Colors */
+  --color-terracotta: #e35336;
+  --color-terracotta-soft: #ffb0a1;
+  --color-brickstone: #9e3a26;
+  --color-brickstone-deep: #451911;
+
+  /* Neutrals */
+  --color-bone: #f4f1ea;
+  --color-sand: #e6e2da;
+  --color-charcoal-brown: #1a1614;
+  --color-charcoal-brown-soft: #2d2825;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   /* === Spacing Scale === */
   --space-1: 0.25rem;
@@ -37,17 +49,17 @@
   --radius-2xl: 28px;
   --radius-full: 9999px;
 
-  /* === Transitions === */
+  /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* === Shadows === */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
+  /* Elevation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
   /* === Z-Index Scale === */
   --z-base: 1;
@@ -59,96 +71,89 @@
 }
 
 /* ============================================================
-   LIGHT THEME — "Opaline"
-   Warm, bright, breathable
+   LIGHT THEME — "Bone & Sand"
+   Approachable, grounded, and clean.
    ============================================================ */
-:root,
 [data-theme='light'] {
-  --color-background: #fafbfc;
+  --color-background: var(--color-bone);
   --color-surface: #ffffff;
   --color-surface-elevated: #ffffff;
-  --color-surface-hover: #f4f5f7;
-  --color-surface-active: #ebedf0;
+  --color-surface-hover: #fafafa;
+  --color-surface-active: #f0f0f0;
 
-  --color-text-primary: #0d1117;
-  --color-text-secondary: #57606a;
-  --color-text-tertiary: #8b949e;
-  --color-text-inverse: #ffffff;
+  --color-text-primary: var(--color-charcoal-brown);
+  --color-text-secondary: #5c5552;
+  --color-text-tertiary: #8c837f;
+  --color-text-inverse: var(--color-bone);
 
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.15);
-  --color-border-focus: #4f8ff7;
+  --color-border: rgba(26, 22, 20, 0.08);
+  --color-border-strong: rgba(26, 22, 20, 0.15);
+  --color-border-focus: var(--color-terracotta);
 
-  --color-accent: #4f8ff7;
-  --color-accent-hover: #3b7de6;
-  --color-accent-soft: rgba(79, 143, 247, 0.08);
-  --color-accent-glow: rgba(79, 143, 247, 0.25);
+  --color-accent: var(--color-terracotta);
+  --color-accent-hover: var(--color-brickstone);
+  --color-accent-soft: rgba(227, 83, 54, 0.1);
+  --color-accent-glow: rgba(227, 83, 54, 0.2);
 
   /* Status Colors */
-  --color-success: #2ea44f;
-  --color-success-soft: rgba(46, 164, 79, 0.08);
-  --color-warning: #d29922;
-  --color-warning-soft: rgba(210, 153, 34, 0.08);
-  --color-danger: #cf222e;
-  --color-danger-soft: rgba(207, 34, 46, 0.08);
-  --color-info: #4f8ff7;
-  --color-info-soft: rgba(79, 143, 247, 0.08);
+  --color-success: #2d6a4f;
+  --color-success-soft: rgba(45, 106, 79, 0.1);
+  --color-warning: #b07d05;
+  --color-warning-soft: rgba(176, 125, 5, 0.1);
+  --color-danger: #ae2a2a;
+  --color-danger-soft: rgba(174, 42, 42, 0.1);
+  --color-info: #2a6bae;
+  --color-info-soft: rgba(42, 107, 174, 0.1);
 
   /* Glass */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-strong: rgba(255, 255, 255, 0.88);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-bg-strong: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(26, 22, 20, 0.08);
+  --glass-blur: 16px;
+  --glass-shadow: 0 8px 32px rgba(26, 22, 20, 0.05);
 }
 
 /* ============================================================
-   DARK THEME — "Jade Pebble"
-   Deep, rich, industrial-glass feel
+   DARK THEME — "Obsidian Earth"
+   Deep, rich, and sophisticated.
    ============================================================ */
 [data-theme='dark'] {
-  --color-background: #0a0a0f;
-  --color-surface: #12121a;
-  --color-surface-elevated: #1a1a24;
-  --color-surface-hover: #1e1e2a;
-  --color-surface-active: #24243a;
+  --color-background: #12100e;
+  --color-surface: #1a1614;
+  --color-surface-elevated: #241e1b;
+  --color-surface-hover: #2d2622;
+  --color-surface-active: #362e29;
 
-  --color-text-primary: #e6e8eb;
-  --color-text-secondary: #9ba1a9;
-  --color-text-tertiary: #636a73;
-  --color-text-inverse: #0a0a0f;
+  --color-text-primary: #f4f1ea;
+  --color-text-secondary: #bdb2ac;
+  --color-text-tertiary: #8c837f;
+  --color-text-inverse: #12100e;
 
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
-  --color-border-focus: #6ea8fe;
+  --color-border: rgba(244, 241, 234, 0.06);
+  --color-border-strong: rgba(244, 241, 234, 0.12);
+  --color-border-focus: var(--color-terracotta-soft);
 
-  --color-accent: #6ea8fe;
-  --color-accent-hover: #85b6ff;
-  --color-accent-soft: rgba(110, 168, 254, 0.1);
-  --color-accent-glow: rgba(110, 168, 254, 0.2);
+  --color-accent: var(--color-terracotta);
+  --color-accent-hover: var(--color-terracotta-soft);
+  --color-accent-soft: rgba(227, 83, 54, 0.15);
+  --color-accent-glow: rgba(227, 83, 54, 0.3);
 
   /* Status Colors */
-  --color-success: #3fb950;
-  --color-success-soft: rgba(63, 185, 80, 0.1);
-  --color-warning: #d29922;
-  --color-warning-soft: rgba(210, 153, 34, 0.1);
-  --color-danger: #f85149;
-  --color-danger-soft: rgba(248, 81, 73, 0.1);
-  --color-info: #6ea8fe;
-  --color-info-soft: rgba(110, 168, 254, 0.1);
+  --color-success: #52b788;
+  --color-success-soft: rgba(82, 183, 136, 0.1);
+  --color-warning: #ee9b00;
+  --color-warning-soft: rgba(238, 155, 0, 0.1);
+  --color-danger: #e63946;
+  --color-danger-soft: rgba(230, 57, 70, 0.1);
+  --color-info: #5c677d;
+  --color-info-soft: rgba(92, 103, 125, 0.1);
 
   /* Glass */
-  --glass-bg: rgba(18, 18, 26, 0.7);
-  --glass-bg-strong: rgba(26, 26, 36, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(26, 22, 20, 0.75);
+  --glass-bg-strong: rgba(36, 30, 27, 0.95);
+  --glass-border: rgba(244, 241, 234, 0.08);
   --glass-blur: 24px;
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================================
@@ -568,7 +573,7 @@ body {
 
 .glass-card:hover {
   border-color: var(--color-border-strong);
-  box-shadow: var(--glass-shadow), 0 0 20px var(--color-accent-soft);
+  box-shadow: var(--glass-shadow), 0 0 20px rgba(227, 83, 54, 0.1);
   transform: translateY(-2px);
 }
 
@@ -1181,5 +1186,66 @@ body {
 
   .dash-header {
     padding: var(--space-3) var(--space-4);
+  }
+}
+
+/* ============================================================
+   ANIMATIONS & TRANSITIONS
+   ============================================================ */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Preloader Specific */
+.preloader-logo {
+  filter: drop-shadow(0 0 15px var(--color-accent-glow));
+  animation: logo-drift 4s ease-in-out infinite alternate;
+}
+
+@keyframes logo-drift {
+  from {
+    transform: translateY(0) rotate(0);
+  }
+
+  to {
+    transform: translateY(-10px) rotate(2deg);
   }
 }

@@ -75,9 +75,25 @@ echo -e "${GREEN}✔${NC} Dependencies installed"
 # ── Step 3: Database Migration ─────────────────────────────
 echo ""
 echo -e "${YELLOW}🗄️  Step 3/4: Pushing database schema...${NC}"
-cd "$ROOT_DIR/apps/api"
-npx drizzle-kit push --force 2>&1 | grep -E "(Changes|table|No changes|error)" | sed 's/^/   /' || true
-cd "$ROOT_DIR"
+
+# Find the latest migration SQL file
+MIGRATION_DIR="$ROOT_DIR/apps/api/drizzle"
+if [ -d "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql 1>/dev/null 2>&1; then
+    LATEST_SQL=$(ls -t "$MIGRATION_DIR"/*.sql | head -1)
+    echo "   Applying migration: $(basename $LATEST_SQL)"
+    cat "$LATEST_SQL" | docker exec -i job-tracking-postgres psql -U postgres -d job_tracking 2>&1 \
+        | grep -v "already exists" | grep -v "^$" | sed 's/^/   /' || true
+else
+    echo "   No migration files found, generating..."
+    cd "$ROOT_DIR/apps/api"
+    npx drizzle-kit generate 2>&1 | grep -E "(table|migration|✓)" | sed 's/^/   /' || true
+    LATEST_SQL=$(ls -t "$MIGRATION_DIR"/*.sql 2>/dev/null | head -1)
+    if [ -n "$LATEST_SQL" ]; then
+        cat "$LATEST_SQL" | docker exec -i job-tracking-postgres psql -U postgres -d job_tracking 2>&1 \
+            | grep -v "already exists" | grep -v "^$" | sed 's/^/   /' || true
+    fi
+    cd "$ROOT_DIR"
+fi
 echo -e "${GREEN}✔${NC} Database schema up to date"
 
 # ── Step 4: Start All Services ─────────────────────────────

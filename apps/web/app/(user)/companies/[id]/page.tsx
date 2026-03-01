@@ -5,6 +5,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { fetcher } from '../../../../lib/api';
 import Link from 'next/link';
+import {
+    Search as SearchIcon,
+    RefreshCw,
+    Briefcase,
+    MapPin,
+    Users,
+    Calendar,
+    Save,
+    Home,
+    ArrowLeft,
+    Share2,
+    ExternalLink,
+    Clock,
+    CheckCircle2,
+    XCircle,
+    Info,
+    LayoutDashboard,
+    Loader2
+} from 'lucide-react';
 
 interface CompanyDetail {
     id: string;
@@ -111,44 +130,67 @@ export default function CompanyDetailPage() {
                             className="btn"
                             onClick={() => reCrawlMut.mutate()}
                             disabled={company.crawlStatus === 'RUNNING' || reCrawlMut.isPending}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                         >
-                            {reCrawlMut.isPending ? '⏳ Queuing...' : '🔄 Re-crawl Now'}
+                            {reCrawlMut.isPending || company.crawlStatus === 'RUNNING' ? (
+                                <RefreshCw size={16} className="animate-spin" />
+                            ) : (
+                                <RefreshCw size={16} />
+                            )}
+                            {reCrawlMut.isPending ? 'Queuing Discovery...' : 'Trigger Discovery'}
                         </button>
                     </div>
                 </section>
 
                 {/* Stats */}
-                <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div className="kpi-card">
-                        <span className="kpi-label">Total Jobs</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">Total Jobs</span>
+                            <Briefcase size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+                        </div>
                         <span className="kpi-value">{company.stats.total}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Open</span>
-                        <span className="kpi-value" style={{ color: '#22c55e' }}>{company.stats.open}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">Open</span>
+                            <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+                        </div>
+                        <span className="kpi-value" style={{ color: 'var(--color-success)' }}>{company.stats.open}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Closed</span>
-                        <span className="kpi-value" style={{ color: '#ef4444' }}>{company.stats.closed}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">Closed</span>
+                            <XCircle size={16} style={{ color: 'var(--color-danger)' }} />
+                        </div>
+                        <span className="kpi-value" style={{ color: 'var(--color-danger)' }}>{company.stats.closed}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">New This Week</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span className="kpi-label">New This Week</span>
+                            <Calendar size={16} style={{ color: 'var(--color-accent)' }} />
+                        </div>
                         <span className="kpi-value" style={{ color: 'var(--color-accent)' }}>{company.stats.newThisWeek}</span>
                     </div>
                 </section>
 
                 {/* Search + Jobs Table */}
                 <section className="glass-card" style={{ padding: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Jobs ({jobsData?.total || 0})</h3>
-                        <input
-                            className="input"
-                            type="text"
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            placeholder="Filter jobs..."
-                            style={{ maxWidth: '250px', fontSize: '0.85rem' }}
-                        />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <LayoutDashboard size={18} className="text-secondary" /> Discovered Jobs ({jobsData?.total || 0})
+                        </h3>
+                        <div style={{ position: 'relative', width: '250px' }}>
+                            <SearchIcon size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                            <input
+                                className="input"
+                                type="text"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Filter results..."
+                                style={{ paddingLeft: '2.25rem', fontSize: '0.85rem' }}
+                            />
+                        </div>
                     </div>
 
                     {jobs.length === 0 ? (
@@ -169,24 +211,31 @@ export default function CompanyDetailPage() {
                                 <tbody>
                                     {jobs.map(job => (
                                         <tr key={job.id} style={{ borderBottom: '1px solid var(--glass-border-subtle, rgba(255,255,255,0.04))' }}>
-                                            <td style={{ padding: '0.6rem 0.5rem' }}>
-                                                <a href={job.canonicalJobUrl} target="_blank" rel="noopener" style={{ fontWeight: 500, color: 'var(--color-foreground)', textDecoration: 'none' }}>
-                                                    {job.jobTitle}
-                                                </a>
-                                                {job.isRemote && <span style={{ fontSize: '0.7rem', color: 'var(--color-accent)', marginLeft: '0.4rem' }}>🏠 Remote</span>}
+                                            <td style={{ padding: '0.75rem 0.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <a href={job.canonicalJobUrl} target="_blank" rel="noopener" style={{ fontWeight: 600, color: 'var(--color-foreground)', textDecoration: 'none', borderBottom: '1px solid transparent', transition: 'border-color 0.2s' }}>
+                                                        {job.jobTitle}
+                                                    </a>
+                                                    {job.isRemote && (
+                                                        <span style={{ fontSize: '0.65rem', background: 'var(--color-accent-soft)', color: 'var(--color-accent)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                            <Home size={10} /> REMOTE
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.jobLocation || '—'}</td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.jobTeam || '—'}</td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)' }}>{job.employmentType || '—'}</td>
                                             <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-muted-foreground)', fontSize: '0.8rem' }}>{new Date(job.firstSeenAt).toLocaleDateString()}</td>
-                                            <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
+                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>
                                                 <button
                                                     className="btn"
                                                     onClick={() => saveMut.mutate(job.jobSlug)}
                                                     disabled={saveMut.isPending}
-                                                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                                                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: 'auto' }}
                                                 >
-                                                    💾 Save
+                                                    {saveMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                                    <span>Track</span>
                                                 </button>
                                             </td>
                                         </tr>

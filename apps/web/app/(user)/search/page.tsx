@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetcher } from '../../../lib/api';
 import Link from 'next/link';
+import { Search as SearchIcon, Building2, Briefcase, MapPin, Users, Calendar, ArrowRight, Loader2 } from 'lucide-react';
 
 interface SearchCompany {
     id: string;
@@ -88,21 +89,25 @@ export default function SearchPage() {
                             padding: '0.9rem 1rem 0.9rem 2.5rem',
                         }}
                     />
-                    <span style={{
-                        position: 'absolute',
-                        left: '0.8rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        fontSize: '1.1rem',
-                        pointerEvents: 'none',
-                    }}>
-                        🔍
-                    </span>
+                    <SearchIcon
+                        size={20}
+                        style={{
+                            position: 'absolute',
+                            left: '0.8rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'var(--color-text-tertiary)',
+                            pointerEvents: 'none',
+                        }}
+                    />
                 </div>
 
                 {/* Results */}
                 {isLoading && debouncedQuery.length >= 2 && (
-                    <div style={{ textAlign: 'center', color: 'var(--color-muted-foreground)', padding: '2rem' }}>Searching...</div>
+                    <div style={{ textAlign: 'center', color: 'var(--color-muted-foreground)', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        <Loader2 className="animate-spin" size={18} />
+                        <span>Searching discovery engine...</span>
+                    </div>
                 )}
 
                 {debouncedQuery.length >= 2 && !isLoading && !hasResults && (

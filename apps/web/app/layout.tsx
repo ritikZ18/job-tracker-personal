@@ -5,7 +5,7 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'Job Tracker - Track Your Applications',
-  description: 'Excel-like job application tracking system with premium Tesla-inspired design',
+  description: 'Excel-like job application tracking system with premium Earthy Minimalist design',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -19,13 +19,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F6F7F9' },
-    { media: '(prefers-color-scheme: dark)', color: '#0B0D10' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F1EA' }, // Bone
+    { media: '(prefers-color-scheme: dark)', color: '#12100E' },  // Obsidian Earth
   ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
 };
+
+import { Preloader } from './components/Preloader';
 
 export default function RootLayout({
   children,
@@ -45,6 +47,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body>
+        <Preloader />
         <Providers>{children}</Providers>
         <script
           dangerouslySetInnerHTML={{
