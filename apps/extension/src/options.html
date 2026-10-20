@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CareerCrawl Settings</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body {
+        width: 380px;
+      }
+
+      label {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin: 12px 0 4px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      .help {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <h1>Settings</h1>
+    </header>
+
+    <label for="apiBase">API base URL</label>
+    <input id="apiBase" type="url" placeholder="http://localhost:3001" />
+    <p class="help">Where the CareerCrawl API is hosted.</p>
+
+    <label for="apiToken">API token (optional)</label>
+    <input id="apiToken" type="password" placeholder="Supabase JWT" />
+    <p class="help">
+      Leave blank for local dev (auth bypass). In production paste your Supabase
+      access token.
+    </p>
+
+    <button id="save" class="primary" style="margin-top: 14px">Save</button>
+    <p id="message" style="margin-top: 8px"></p>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

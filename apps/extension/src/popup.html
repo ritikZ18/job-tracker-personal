@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Save to CareerCrawl</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+
+  <body>
+    <header>
+      <h1>CareerCrawl</h1>
+      <a id="open-options" href="#">Settings</a>
+    </header>
+
+    <section id="preview" hidden>
+      <div class="row">
+        <span class="label">Title</span>
+        <span id="p-title"></span>
+      </div>
+      <div class="row">
+        <span class="label">Company</span>
+        <span id="p-company"></span>
+      </div>
+      <div class="row">
+        <span class="label">Location</span>
+        <span id="p-location">—</span>
+      </div>
+    </section>
+
+    <section id="status">
+      <p id="message">Reading page…</p>
+    </section>
+
+    <button id="save" class="primary" disabled>Save Application</button>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -9,9 +9,9 @@ import {
     AnalyzeJobUrlSchema,
 } from '@repo/types';
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { Redis } from 'ioredis';
 
-const redis = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
 });
 const analyzeQueue = new Queue('analyze-job', { connection: redis });
@@ -20,6 +20,36 @@ const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+// Admin-only global view
+router.get('/admin/all', async (req: Request, res: Response) => {
+    try {
+        if (req.user!.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const apps = await db
+            .select({
+                id: schema.applications.id,
+                company: schema.applications.company,
+                jobTitle: schema.applications.jobTitle,
+                status: schema.applications.status,
+                createdAt: schema.applications.createdAt,
+                userEmail: schema.users.email,
+            })
+            .from(schema.applications)
+            .innerJoin(schema.users, eq(schema.applications.userId, schema.users.id))
+            .orderBy(desc(schema.applications.createdAt));
+
+        return res.json(apps.map(app => ({
+            ...app,
+            createdAt: app.createdAt.toISOString()
+        })));
+    } catch (error) {
+        console.error('Admin get apps error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
 // GET /applications
 router.get('/', async (req: Request, res: Response) => {
@@ -66,7 +96,10 @@ router.get('/', async (req: Request, res: Response) => {
             apps.map((app) => ({
                 ...app,
                 appliedAt: app.appliedAt?.toISOString() || null,
+                interviewingAt: app.interviewingAt?.toISOString() || null,
+                offerAt: app.offerAt?.toISOString() || null,
                 rejectedAt: app.rejectedAt?.toISOString() || null,
+                ghostedAt: app.ghostedAt?.toISOString() || null,
                 createdAt: app.createdAt.toISOString(),
                 updatedAt: app.updatedAt.toISOString(),
             }))
@@ -94,6 +127,10 @@ router.post('/', async (req: Request, res: Response) => {
             })
             .returning();
 
+        if (!app) {
+            return res.status(500).json({ error: 'Failed to create application' });
+        }
+
         // Create audit event
         await db.insert(schema.applicationEvents).values({
             applicationId: app.id,
@@ -104,7 +141,10 @@ router.post('/', async (req: Request, res: Response) => {
         return res.status(201).json({
             ...app,
             appliedAt: app.appliedAt?.toISOString() || null,
+            interviewingAt: app.interviewingAt?.toISOString() || null,
+            offerAt: app.offerAt?.toISOString() || null,
             rejectedAt: app.rejectedAt?.toISOString() || null,
+            ghostedAt: app.ghostedAt?.toISOString() || null,
             createdAt: app.createdAt.toISOString(),
             updatedAt: app.updatedAt.toISOString(),
         });
@@ -124,11 +164,13 @@ router.patch('/:id', async (req: Request, res: Response) => {
         }
 
         // Check ownership
-        const [existing] = await db
+        const results = await db
             .select()
             .from(schema.applications)
-            .where(and(eq(schema.applications.id, id), eq(schema.applications.userId, req.user!.id)))
+            .where(and(eq(schema.applications.id, id as string), eq(schema.applications.userId, req.user!.id)))
             .limit(1);
+
+        const existing = results[0];
 
         if (!existing) {
             return res.status(404).json({ error: 'Application not found' });
@@ -141,12 +183,16 @@ router.patch('/:id', async (req: Request, res: Response) => {
                 appliedAt: parsed.data.appliedAt ? new Date(parsed.data.appliedAt) : undefined,
                 updatedAt: new Date(),
             })
-            .where(eq(schema.applications.id, id))
+            .where(eq(schema.applications.id, id as string))
             .returning();
+
+        if (!updated) {
+            return res.status(500).json({ error: 'Failed to update application' });
+        }
 
         // Create audit event
         await db.insert(schema.applicationEvents).values({
-            applicationId: id,
+            applicationId: id as string,
             type: 'FIELD_EDIT',
             payload: { previous: existing, updated: parsed.data },
         });
@@ -174,11 +220,13 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
         }
 
         // Check ownership
-        const [existing] = await db
+        const results = await db
             .select()
             .from(schema.applications)
-            .where(and(eq(schema.applications.id, id), eq(schema.applications.userId, req.user!.id)))
+            .where(and(eq(schema.applications.id, id as string), eq(schema.applications.userId, req.user!.id)))
             .limit(1);
+
+        const existing = results[0];
 
         if (!existing) {
             return res.status(404).json({ error: 'Application not found' });
@@ -189,20 +237,30 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
             updatedAt: new Date(),
         };
 
-        // Auto-stamp rejectedAt if status changed to REJECTED
-        if (parsed.data.status === 'REJECTED' && !existing.rejectedAt) {
+        // Auto-stamp dates based on status
+        if (parsed.data.status === 'INTERVIEWING' && !existing.interviewingAt) {
+            updates.interviewingAt = new Date();
+        } else if (parsed.data.status === 'OFFER' && !existing.offerAt) {
+            updates.offerAt = new Date();
+        } else if (parsed.data.status === 'REJECTED' && !existing.rejectedAt) {
             updates.rejectedAt = new Date();
+        } else if (parsed.data.status === 'GHOSTED' && !existing.ghostedAt) {
+            updates.ghostedAt = new Date();
         }
 
         const [updated] = await db
             .update(schema.applications)
             .set(updates)
-            .where(eq(schema.applications.id, id))
+            .where(eq(schema.applications.id, id as string))
             .returning();
+
+        if (!updated) {
+            return res.status(500).json({ error: 'Failed to update status' });
+        }
 
         // Create audit event
         await db.insert(schema.applicationEvents).values({
-            applicationId: id,
+            applicationId: id as string,
             type: 'STATUS_CHANGED',
             payload: { from: existing.status, to: parsed.data.status },
         });
@@ -229,7 +287,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
         }
 
         // Create job analysis record
-        const [analysis] = await db
+        const results = await db
             .insert(schema.jobAnalyses)
             .values({
                 userId: req.user!.id,
@@ -237,6 +295,11 @@ router.post('/analyze', async (req: Request, res: Response) => {
                 status: 'PENDING',
             })
             .returning();
+
+        const analysis = results[0];
+        if (!analysis) {
+            return res.status(500).json({ error: 'Failed to create analysis record' });
+        }
 
         // Enqueue for processing
         await analyzeQueue.add('analyze', {
@@ -261,17 +324,19 @@ router.delete('/:id', async (req: Request, res: Response) => {
         const { id } = req.params;
 
         // Check ownership
-        const [existing] = await db
+        const results = await db
             .select({ id: schema.applications.id })
             .from(schema.applications)
-            .where(and(eq(schema.applications.id, id), eq(schema.applications.userId, req.user!.id)))
+            .where(and(eq(schema.applications.id, id as string), eq(schema.applications.userId, req.user!.id)))
             .limit(1);
+
+        const existing = results[0];
 
         if (!existing) {
             return res.status(404).json({ error: 'Application not found' });
         }
 
-        await db.delete(schema.applications).where(eq(schema.applications.id, id));
+        await db.delete(schema.applications).where(eq(schema.applications.id, id as string));
 
         return res.status(204).send();
     } catch (error) {
